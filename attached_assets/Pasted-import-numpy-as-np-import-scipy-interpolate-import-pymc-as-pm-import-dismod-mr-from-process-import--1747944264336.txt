@@ -1,0 +1,229 @@
+import numpy as np
+import scipy.interpolate
+import pymc as pm
+import dismod_mr
+from .process import age_specific_rate
+
+def consistent(
+    model,
+    reference_area='all',
+    reference_sex='total',
+    reference_year='all',
+    priors=None,
+    zero_re=True,
+    rate_type='neg_binom'
+):
+    """
+    Build a consistent multi-rate disease natural history model.
+    """
+    if priors is None:
+        priors = {}
+
+    # 1) Inject any user-specified effect priors
+    for t in ['i', 'r', 'f', 'p', 'pf', 'rr']:
+        if t in priors:
+            model.parameters[t].setdefault('random_effects', {})
+            model.parameters[t]['random_effects'].update(priors[t].get('random_effects', {}))
+            model.parameters[t].setdefault('fixed_effects', {})
+            model.parameters[t]['fixed_effects'].update(priors[t].get('fixed_effects', {}))
+
+    # 2) Normalize rate_type to dict for all keys
+    keys = ['i','r','f','p','pf','m_wo','rr','smr','m_with','X']
+    if isinstance(rate_type, str):
+        rt_map = {k: rate_type for k in keys}
+    else:
+        rt_map = {k: rate_type.get(k, rate_type) for k in keys}
+
+    rate = {}
+    ages = np.array(model.parameters['ages'], dtype=float)
+
+    with pm.Model() as m:
+        # 3) Fit incidence, remission, fatal
+        for t in ['i','r','f']:
+            asr_vars = age_specific_rate(
+                model, t,
+                reference_area, reference_sex, reference_year,
+                mu_age=None,
+                mu_age_parent=priors.get((t,'mu')),
+                sigma_age_parent=priors.get((t,'sigma')),
+                rate_type=rt_map[t],
+                zero_re=zero_re
+            )
+            rate[t] = asr_vars[t]
+
+            # Initialize spline-knots from data/prior
+            df = model.get_data(t)
+            init = (np.array(priors[t].get('mu'))
+                    if t in priors and isinstance(priors[t], dict)
+                    else rate[t]['mu_age'].initval.copy())
+            if not df.empty:
+                mean_df = df.groupby(['age_start','age_end']).mean().reset_index()
+                for _, row in mean_df.iterrows():
+                    start = int(row['age_start'] - rate[t]['ages'][0])
+                    end   = int(row['age_end']   - rate[t]['ages'][0])
+                    init[start:end+1] = row['value']
+            for i_k, knot in enumerate(rate[t]['knots']):
+                rate[t]['gamma'][i_k].initval = np.log(init[int(knot - rate[t]['ages'][0])] + 1e-9)
+
+        # 4) Prepare all-cause mortality m_all
+        df_all = model.get_data('m_all')
+        if df_all.empty:
+            m_all = np.full_like(ages, 0.01)
+        else:
+            mean_m = df_all.groupby(['age_start','age_end']).mean().reset_index()
+            ks = [(r['age_start']+r['age_end']+1)/2. for _,r in mean_m.iterrows()]
+            vs = mean_m['value'].tolist()
+            knots = [ages[0]] + ks + [ages[-1]]
+            vals  = [vs[0]] + vs + [vs[-1]]
+            m_all = scipy.interpolate.interp1d(knots, vals, kind='linear')(ages)
+
+        # 5) Prevalence p via ODE / analytic
+        logit_C0 = pm.Uniform('logit_C0', lower=-15, upper=15, initval=-10)
+
+        def _compute_p(logit_C0, i_vals, r_vals, f_vals):
+            # analytic when remission large
+            if r_vals.min() > 5.99:
+                return i_vals / (r_vals + m_all + f_vals)
+            C0 = pm.math.invlogit(logit_C0)
+            S = np.zeros_like(ages)
+            C = np.zeros_like(ages)
+            dismod_mr.model.ode.ode_function(
+                susceptible=S,
+                condition=C,
+                num_step=2,
+                age_local=ages,
+                all_cause=m_all,
+                incidence=i_vals,
+                remission=r_vals,
+                excess=f_vals,
+                s0=1 - C0,
+                c0=C0
+            )
+            p = C / (S + C)
+            return pm.math.where(pm.math.isnan(p), 0.0, p)
+
+        mu_age_p = pm.Deterministic(
+            'mu_age_p',
+            _compute_p(
+                logit_C0,
+                rate['i']['mu_age'],
+                rate['r']['mu_age'],
+                rate['f']['mu_age']
+            )
+        )
+
+        rate['p'] = age_specific_rate(
+            model, 'p',
+            reference_area, reference_sex, reference_year,
+            mu_age=mu_age_p,
+            mu_age_parent=priors.get(('p','mu')),
+            sigma_age_parent=priors.get(('p','sigma')),
+            rate_type=rt_map['p'],
+            include_covariates=False,
+            zero_re=zero_re
+        )['p']
+
+        # 6) Prevalence–fatal pf
+        mu_age_pf = pm.Deterministic(
+            'mu_age_pf',
+            rate['p']['mu_age'] * rate['f']['mu_age']
+        )
+        rate['pf'] = age_specific_rate(
+            model, 'pf',
+            reference_area, reference_sex, reference_year,
+            mu_age=mu_age_pf,
+            mu_age_parent=priors.get(('pf','mu')),
+            sigma_age_parent=priors.get(('pf','sigma')),
+            lower_bound='csmr',
+            include_covariates=False,
+            zero_re=zero_re
+        )['pf']
+
+        # 7) Non‐fatal mortality m_wo
+        mu_age_m = pm.Deterministic(
+            'mu_age_m',
+            pm.math.clip(m_all - rate['pf']['mu_age'], 1e-6, 1e6)
+        )
+        rate['m_wo'] = age_specific_rate(
+            model, 'm_wo',
+            reference_area, reference_sex, reference_year,
+            mu_age=mu_age_m,
+            include_covariates=False,
+            zero_re=zero_re
+        )['m_wo']
+
+        # 8) Relative risk rr
+        mu_age_rr = pm.Deterministic(
+            'mu_age_rr',
+            (rate['m_wo']['mu_age'] + rate['f']['mu_age']) / rate['m_wo']['mu_age']
+        )
+        rate['rr'] = age_specific_rate(
+            model, 'rr',
+            reference_area, reference_sex, reference_year,
+            mu_age=mu_age_rr,
+            rate_type=rt_map['rr'],
+            include_covariates=False,
+            zero_re=zero_re
+        )['rr']
+
+        # 9) Standardized mortality ratio smr
+        mu_age_smr = pm.Deterministic(
+            'mu_age_smr',
+            (rate['m_wo']['mu_age'] + rate['f']['mu_age']) / m_all
+        )
+        rate['smr'] = age_specific_rate(
+            model, 'smr',
+            reference_area, reference_sex, reference_year,
+            mu_age=mu_age_smr,
+            rate_type=rt_map['smr'],
+            include_covariates=False,
+            zero_re=zero_re
+        )['smr']
+
+        # 10) With‐mortality m_with
+        mu_age_m_with = pm.Deterministic(
+            'mu_age_m_with',
+            rate['m_wo']['mu_age'] + rate['f']['mu_age']
+        )
+        rate['m_with'] = age_specific_rate(
+            model, 'm_with',
+            reference_area, reference_sex, reference_year,
+            mu_age=mu_age_m_with,
+            rate_type=rt_map['m_with'],
+            include_covariates=False,
+            zero_re=zero_re
+        )['m_with']
+
+        # 11) Duration X
+        def _compute_X(r_vals, m_vals, f_vals):
+            hazard = r_vals + m_vals + f_vals
+            pr_not = pm.math.exp(-hazard)
+            # manual reverse‐loop
+            X = np.zeros_like(hazard)
+            X[-1] = 1.0 / hazard[-1]
+            for idx in range(len(hazard)-2, -1, -1):
+                X[idx] = (
+                    pr_not[idx] * (X[idx+1] + 1) +
+                    (1 - pr_not[idx]) / hazard[idx] -
+                    pr_not[idx]
+                )
+            return X
+
+        mu_age_X = pm.Deterministic(
+            'mu_age_X',
+            _compute_X(
+                rate['r']['mu_age'],
+                rate['m_wo']['mu_age'],
+                rate['f']['mu_age']
+            )
+        )
+        rate['X'] = age_specific_rate(
+            model, 'X',
+            reference_area, reference_sex, reference_year,
+            mu_age=mu_age_X,
+            rate_type=rt_map['X'],
+            include_covariates=True,
+            zero_re=zero_re
+        )['X']
+
+    return rate
