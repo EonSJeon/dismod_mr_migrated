@@ -138,7 +138,8 @@ def build_sigma_alpha(data_type: str,
                                sigma=sigma,
                                lower=lb,
                                upper=ub,
-                               initval=mu))
+                               initval=mu,
+                               transform=None))
     return sigma_alpha
 
 
@@ -238,9 +239,6 @@ def mean_covariate_model(data_type: str,
     고정효과 및 랜덤효과, 예측값 pi 등을 담은 dict
     """
     # --- 1) 랜덤 효과 행렬 생성 및 shift 벡터 계산 ---
-    print(input_data)
-
-    
     U, U_shift = build_random_effects_matrix(input_data, model, root_area, parameters)
     sigma_alpha = build_sigma_alpha(data_type, parameters)
     alpha, const_alpha_sigma, alpha_potentials = build_alpha(

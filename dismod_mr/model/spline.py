@@ -77,23 +77,26 @@ def spline(data_type: str,
     if not np.all(np.diff(knots) > 0):
         raise ValueError('Spline knots must be strictly increasing')
 
-    model = pm.modelcontext(None)
+    # Build inside a model context
+    with pm.Model() as _model:
+        K = len(knots)
+        # normal priors on log-scale spline coefficients
+        gamma = [
+            pm.Normal(f"gamma_{data_type}_{i}", mu=0.0, sigma=10.0, initval=0.0)
+            for i in range(K)
+        ]
+        gamma_vec = at.stack(gamma)
 
-    K = len(knots)
-    gamma = [
-        pm.Normal(f"gamma_{data_type}_{i}", mu=0.0, sigma=10.0, initval=0.0)
-        for i in range(K)
-    ]
-    gamma_vec = at.stack(gamma)
+        # interpolation via custom Op
+        interp = InterpOp(knots, ages, interpolation_method)
+        mu_age = pm.Deterministic(f"mu_age_{data_type}", interp(gamma_vec))
 
-    interp = InterpOp(knots, ages, interpolation_method)
-    mu_age = pm.Deterministic(f"mu_age_{data_type}", interp(gamma_vec))
+        # optional smoothing prior
+        if smoothing > 0 and np.isfinite(smoothing):
+            diffs = gamma_vec[1:] - gamma_vec[:-1]
+            intervals = knots[1:] - knots[:-1]
+            smooth_term = at.sqrt(at.sum(diffs**2 / intervals))
+            tau = smoothing**-2
+            pm.Potential(f"smooth_{data_type}", -0.5 * tau * smooth_term**2)
 
-    if smoothing > 0 and np.isfinite(smoothing):
-        diffs = gamma_vec[1:] - gamma_vec[:-1]
-        intervals = knots[1:] - knots[:-1]
-        smooth_term = at.sqrt(at.sum(diffs**2 / intervals))
-        tau = smoothing**-2
-        pm.Potential(f"smooth_{data_type}", -0.5 * tau * smooth_term**2)
-
-    return {'gamma': gamma, 'mu_age': mu_age, 'ages': ages, 'knots': knots}
+    return { 'gamma': gamma, 'mu_age': mu_age, 'ages': ages, 'knots': knots }

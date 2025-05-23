@@ -10,53 +10,91 @@ import pytensor.tensor as pt
 import dismod_mr
 
 
+import numpy as np
+import pandas as pd
+import pymc as pm
+from pymc.step_methods.metropolis import Metropolis
+import dismod_mr
+
 def test_covariate_model_sim_no_hierarchy():
-    # Generate synthetic data
+    # 1) Simulate data under a log-link model
     np.random.seed(42)
     n = 128
-    x = np.random.randn(n, 3)
-    beta = np.array([1.0, -1.0, 0.5])
-    y = x @ beta + np.random.randn(n) * 0.1
+    # X ~ N(0,1) design matrix
+    X = np.random.normal(0, 1, size=(n, 3))
+    beta_true = np.array([-0.1, 0.1, 0.2])
+    # linear predictor on log-scale
+    linear_pred = X @ beta_true
+    # rate on natural scale
+    pi_true = np.exp(linear_pred)
+    sigma_true = 0.01 * np.ones(n)
+    # observations p ~ Normal(pi_true, sigma_true)
+    p = np.random.normal(pi_true, sigma_true)
 
-    # Create DataFrame
+    # 2) Pack into DataFrame
     df = pd.DataFrame({
-        'value': y,
-        'x_0': x[:, 0],
-        'x_1': x[:, 1],
-        'x_2': x[:, 2],
+        'value': p,
+        'x_0': X[:, 0],
+        'x_1': X[:, 1],
+        'x_2': X[:, 2],
         'area': ['all'] * n,
         'sex': ['total'] * n,
         'year_start': [2000] * n,
-        'year_end': [2000] * n
+        'year_end':   [2000] * n
     })
-    print(df)
 
-    # Define the model
+    # 3) Build ModelData for dismod_mr
+    hierarchy, template = dismod_mr.testing.data_simulation.small_output()
+    model_data = dismod_mr.data.ModelData()
+    model_data.hierarchy = hierarchy
+    model_data.output_template = template
+    model_data.input_data = df
+
+    # 4) Define the PyMC model
     with pm.Model() as model:
-        # Priors for fixed effects
-        beta = pm.Normal('beta', mu=0, sigma=1, shape=3)
-        
-        # Prior for error term
-        sigma = pm.HalfNormal('sigma', sigma=1)
-        
-        # Linear predictor
-        mu = pm.math.dot(x, beta)
-        
-        # Likelihood
-        y_obs = pm.Normal('y_obs', mu=mu, sigma=sigma, observed=y)
-        
-        # Sample
+        # intercept mu fixed at 1.0
+        mu = 1.0
+
+        # create the pi = mu * exp(Xβ) node using dismod_mr helper
+        vars = dismod_mr.model.covariates.mean_covariate_model(
+            data_type="test",
+            mu=mu,
+            input_data=df,
+            parameters={},           # no custom priors here
+            model=model_data,
+            root_area="all",
+            root_sex="total",
+            root_year="all",
+            zero_re=True,           # include random‐effects structure if any
+        )
+
+        # observe p ~ Normal(pi, sigma_true)
+        pm.Normal(
+            "obs",
+            mu=vars["pi"],
+            sigma=sigma_true,
+            observed=p,
+        )
+
+        # force Adaptive Metropolis on all free RVs
+        step = Metropolis()
+
+        # sample only 2 draws (to mimic the original test)
         trace = pm.sample(
-            draws=1000,
-            tune=1000,
-            chains=2,
+            draws=500,
+            tune=500,
+            chains=1,
+            step=Metropolis(),
             cores=1,
             return_inferencedata=False
         )
 
-    # Print results
-    print("\nPosterior summary:")
-    print(pm.summary(trace))
+
+    # 5) Quick check: print the posterior mean of each β
+    for i in range(3):
+        name = f"beta_test_x_{i}"
+        print(f"{name} ≃", np.mean(trace[name]))
+
 
 
 def test_covariate_model_sim_w_hierarchy():
