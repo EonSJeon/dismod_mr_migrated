@@ -3,8 +3,38 @@ import pandas as pd
 import pymc as pm
 import networkx as nx
 from typing import Dict, List, Tuple, Any
+import pytensor.tensor as at
 
 SEX_VALUE = {'male': .5, 'total': 0., 'female': -.5}
+
+def debug_hierarchy(hierarchy):
+    """
+    Print detailed information about a NetworkX DiGraph without using nx.info(),
+    so it works even if that function isn’t available.
+    """
+    # 1) 간단한 요약
+    n_nodes = hierarchy.number_of_nodes()
+    n_edges = hierarchy.number_of_edges()
+    print(f"Hierarchy summary: {n_nodes} nodes, {n_edges} edges\n")
+
+    # 2) 노드 리스트
+    print("Nodes:")
+    for node in hierarchy.nodes():
+        print(f"  - {node}")
+    print()
+
+    # 3) 엣지 리스트 (parent -> child)
+    print("Edges:")
+    for parent, child in hierarchy.edges():
+        print(f"  - {parent} → {child}")
+    print()
+
+    # 4) 인접 리스트
+    print("Adjacency list:")
+    for node, neighbors in hierarchy.adjacency():
+        nbrs = list(neighbors)
+        print(f"  - {node}: {nbrs}")
+    print()
 
 
 def build_random_effects_matrix(
@@ -36,6 +66,8 @@ def build_random_effects_matrix(
     """
     n = len(input_data)
     hierarchy = model.hierarchy
+
+    # debug_hierarchy(hierarchy)
     nodes = list(hierarchy.nodes)
     U = pd.DataFrame(0.0, index=input_data.index, columns=nodes)
 
@@ -182,78 +214,122 @@ def build_alpha(
 
 
 def mean_covariate_model(data_type: str,
-                         mu: Any,
+                         mu,
                          input_data: pd.DataFrame,
-                         parameters: Dict[str, Any],
-                         model: Any,
+                         parameters: dict,
+                         model,
                          root_area: str,
                          root_sex: str,
-                         root_year: Any,
-                         zero_re: bool = True) -> Dict[str, Any]:
+                         root_year,
+                         zero_re: bool = True) -> dict:
     """
-    Generate PyMC variables for covariate-adjusted prediction.
+    공변량(고정효과)과 랜덤효과를 포함한 예측 변수(pi)를 생성하는 함수
+
+    매개변수:
+    - data_type: 변수명 접두사로 사용할 문자열
+    - mu: 기준 평균값 (스칼라 혹은 모집단 수준 효과)
+    - input_data: 관측 데이터를 담은 DataFrame
+    - parameters: 사용자 지정 priors 설정 사전
+    - model: ModelData 객체 (hierarchy, output_template 포함)
+    - root_area, root_sex, root_year: 기준(reference) 영역, 성별, 연도
+    - zero_re: True면 참조집단 랜덤효과를 0으로 고정
+
+    반환값:
+    고정효과 및 랜덤효과, 예측값 pi 등을 담은 dict
     """
-    U, U_shift = build_random_effects_matrix(input_data, model, root_area,
-                                             parameters)
+    # --- 1) 랜덤 효과 행렬 생성 및 shift 벡터 계산 ---
+    print(input_data)
+
+    
+    U, U_shift = build_random_effects_matrix(input_data, model, root_area, parameters)
     sigma_alpha = build_sigma_alpha(data_type, parameters)
     alpha, const_alpha_sigma, alpha_potentials = build_alpha(
         data_type, U, sigma_alpha, parameters, zero_re, model.hierarchy)
+
+
+    # --- 2) 고정효과(covariate) 행렬 구성 ---
     keep = [c for c in input_data.columns if c.startswith('x_')]
     X = input_data[keep].copy()
-    X['x_sex'] = input_data['sex'].map(SEX_VALUE)
+    X['x_sex'] = [SEX_VALUE[row['sex']] for _, row in input_data.iterrows()]
+
+    # --- 3) 센터링을 위한 shift 계산 ---
     X_shift = pd.Series(0.0, index=X.columns)
+    # output_template에서 area, sex, year별 평균 추출
     tpl = model.output_template.groupby(['area', 'sex', 'year']).mean()
-    covs = tpl.filter(list(X.columns) + ['pop'])
-    leaves = [
-        n for n in nx.bfs_tree(model.hierarchy, root_area)
-        if model.hierarchy.out_degree(n) == 0
-    ] or [root_area]
+    # covariate 및 pop 열만 선택 (없는 열은 reindex로 0으로 채움)
+    covs = tpl.reindex(columns=list(X.columns) + ['pop'], fill_value=0)
+
+
+    # 계층구조에서 리프 노드(하위 노드 없는 영역) 추출
+    leaves = [n for n in nx.bfs_tree(model.hierarchy, root_area)
+              if model.hierarchy.out_degree(n) == 0] or [root_area]
+    # 참조 조건에 따라 leaf_cov 선택
     if root_sex == 'total' and root_year == 'all':
-        tmp = covs.reset_index().drop(['sex', 'year'],
-                                      axis=1).groupby('area').mean()
-        leaf_cov = tmp.loc[leaves]
+        cov_tmp = covs.reset_index().drop(['sex', 'year'], axis=1)
+        leaf_cov = cov_tmp.groupby('area').mean().loc[leaves]
     else:
         leaf_cov = covs.loc[[(l, root_sex, root_year) for l in leaves]]
+
+    # template에 존재하는 covariate만 shift 반영, 없으면 0 유지
     for cov in X.columns:
-        X_shift[cov] = (leaf_cov[cov] *
-                        leaf_cov['pop']).sum() / leaf_cov['pop'].sum()
+        if cov in leaf_cov.columns:
+            X_shift[cov] = (leaf_cov[cov] * leaf_cov['pop']).sum() / leaf_cov['pop'].sum()
+        else:
+            X_shift[cov] = 0.0
+    # 센터링 적용
     X = X - X_shift
-    beta: List[Any] = []
-    const_beta_sigma: List[float] = []
+
+    # --- 4) 고정효과 priors 설정 ---
+    beta = []
+    const_beta_sigma = []
     for effect in X.columns:
         name = f'beta_{data_type}_{effect}'
         spec = parameters.get('fixed_effects', {}).get(effect)
         if spec:
             dist = spec['dist']
-            if dist == 'Normal':
-                beta.append(
-                    pm.Normal(name,
-                              mu=float(spec['mu']),
-                              sigma=float(spec['sigma']),
-                              initval=float(spec['mu'])))
-            elif dist == 'TruncatedNormal':
-                tau0 = max(float(spec['sigma']), 1e-3)**-2
+            if dist == 'TruncatedNormal':
+                tau = spec['sigma']**-2
                 beta.append(
                     pm.TruncatedNormal(name,
-                                       mu=float(spec['mu']),
-                                       sigma=1 / np.sqrt(tau0),
+                                       mu=spec['mu'],
+                                       sigma=1/np.sqrt(tau),
                                        lower=spec['lower'],
-                                       upper=spec['upper'],
-                                       initval=0.5 *
-                                       (spec['lower'] + spec['upper'])))
+                                       upper=spec['upper']))
             else:
-                beta.append(float(spec['mu']))
-            const_beta_sigma.append(
-                float(spec.get('sigma', np.nan)) if dist ==
-                'Constant' else np.nan)
+                # 기본 Normal 분포 사용
+                beta.append(pm.Normal(name,
+                                       mu=spec.get('mu', 0),
+                                       sigma=spec.get('sigma', 1)))
+            # Constant인 경우 sigma 기록, 아니면 NaN
+            const_beta_sigma.append(spec.get('sigma') if dist=='Constant' else np.nan)
         else:
-            beta.append(pm.Normal(name, mu=0.0, sigma=1.0, initval=0.0))
+            # 사전 설정 없으면 표준 Normal
+            beta.append(pm.Normal(name, mu=0.0, sigma=1.0))
             const_beta_sigma.append(np.nan)
+
+
+    n_obs = U.shape[0]
+
+    # 1) stack only if non-empty, else make a zeros vector
+    if alpha:
+        alpha_stack = pm.math.stack(alpha)         # shape (n_re,)
+        rand_term   = pm.math.dot(U.values, alpha_stack)
+    else:
+        rand_term   = at.zeros((n_obs,))
+
+    if beta:
+        beta_stack = pm.math.stack(beta)           # shape (n_fx,)
+        fix_term   = pm.math.dot(X.values, beta_stack)
+    else:
+        fix_term   = at.zeros((n_obs,))
+
+    # 2) combine them just like NumPy would
     pi = pm.Deterministic(
-        f'pi_{data_type}',
-        mu * pm.math.exp(
-            pm.math.dot(U.values, pm.math.stack(alpha)) +
-            pm.math.dot(X.values, pm.math.stack(beta))))
+        f"pi_{data_type}",
+        mu * pm.math.exp(rand_term + fix_term)
+    )
+
+    # 결과 dict 반환
     return {
         'pi': pi,
         'U': U,
@@ -268,6 +344,7 @@ def mean_covariate_model(data_type: str,
         'const_beta_sigma': const_beta_sigma,
         'hierarchy': model.hierarchy
     }
+
 
 
 def dispersion_covariate_model(name: str, input_data: pd.DataFrame,

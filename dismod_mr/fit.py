@@ -152,3 +152,68 @@ def find_dispersion_initial_vals(vars, method, tol, verbose):
                 pass
     if verbose:
         print_mare(vars)
+
+def setup_asr_step_methods(vars, additional_rvs=None):
+    """
+    Prepare a list of Metropolis step methods for Adaptive Metropolis sampling in PyMC v4+.
+
+    Parameters
+    ----------
+    vars : dict
+        A mapping of variable names to PyMC random variables (DistributionRV).
+        Expected keys include:
+          - 'beta': list of fixed-effect RVs
+          - 'gamma': list of spline-coefficient RVs
+          - 'alpha': list or array of hierarchy RVs
+          - 'U': pandas DataFrame for hierarchy columns
+          - 'hierarchy': networkx.Graph representing hierarchical structure
+    additional_rvs : list, optional
+        Additional RVs to include in their own Metropolis sampler.
+
+    Returns
+    -------
+    steps : list
+        A list of pm.Metropolis step-method instances for use in pm.sample(step=...).
+    """
+    steps = []
+    if additional_rvs is None:
+        additional_rvs = []
+
+    # group fixed effects and spline coefficients
+    fe_group = list(vars.get('beta', []))
+    ap_group = list(vars.get('gamma', []))
+
+    # chain-adjacent gamma pairs
+    chain_pairs = [[ap_group[i], ap_group[i-1]]
+                   for i in range(1, len(ap_group))]
+
+    # prepare all grouping patterns
+    groupings = chain_pairs + [fe_group, ap_group, fe_group + ap_group]
+
+    # hierarchy-based groups
+    if 'hierarchy' in vars and 'alpha' in vars and 'U' in vars:
+        col_map = {key: i for i, key in enumerate(vars['U'].columns)}
+        for node in vars['hierarchy'].nodes:
+            group = []
+            # collect alpha RVs along path from 'all' to node
+            try:
+                path = nx.shortest_path(vars['hierarchy'], 'all', node)
+            except nx.NetworkXNoPath:
+                continue
+            for anc in path:
+                if anc in vars['U'].columns:
+                    rv = vars['alpha'][col_map[anc]]
+                    group.append(rv)
+            if group:
+                groupings.append(group)
+
+    # create a Metropolis sampler for each non-empty group
+    for grp in groupings:
+        if grp and all(getattr(r, 'owner', None) is not None for r in grp):
+            steps.append(pm.Metropolis(vars=grp))
+
+    # any additional RVs get their own sampler
+    if additional_rvs:
+        steps.append(pm.Metropolis(vars=additional_rvs))
+
+    return steps

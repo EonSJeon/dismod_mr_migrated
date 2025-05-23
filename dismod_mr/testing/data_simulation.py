@@ -15,7 +15,7 @@ def simulated_age_intervals(data_type, n, a, pi_age_true, sigma_true):
 
     # 2) true interval-average of pi_age_true using numpy.trapz
     pi_interval_true = [
-        np.trapezoid(pi_age_true[s:e + 1], dx=1) / (e - s)
+        np.trapz(pi_age_true[s:e + 1], dx=1) / (e - s)
         for s, e in zip(age_start, age_end)
     ]
 

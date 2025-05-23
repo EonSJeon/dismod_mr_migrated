@@ -177,7 +177,6 @@ def age_specific_rate(
     result[data_type] = vars
     return result
 
-
 def consistent(
     model,
     reference_area='all',

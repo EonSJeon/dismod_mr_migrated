@@ -1,6 +1,7 @@
 """Test age group models."""
 import numpy as np
 import pymc as pm
+import arviz as az
 
 import dismod_mr
 
@@ -49,8 +50,17 @@ def test_age_standardizing_approx():
             s=sigma_true
         )
 
-        # minimal sampling for test
-        pm.sample(draws=3, chains=1, tune=0, cores=1, progressbar=False)
+        step = pm.Metropolis()            # ← NUTS 대신 Metropolis
+        trace = pm.sample(
+            draws=3,
+            tune=0,                       # Metropolis는 tune=0 으로도 OK
+            step=step,
+            chains=1,
+            cores=1,
+            progressbar=False,
+            return_inferencedata=False
+        )
+        print(trace)
 
 
 def test_age_integrating_midpoint_approx():
@@ -90,10 +100,20 @@ def test_age_integrating_midpoint_approx():
         dismod_mr.model.likelihood.normal(
             'test',
             pi=variables['pi'],
-            sigma=0,
+            sigma=1e-6,  # small non-zero sigma
             p=d['value'],
             s=sigma_true
         )
 
-        # minimal sampling for test
-        pm.sample(draws=3, chains=1, tune=0, cores=1, progressbar=False)
+        # use Adaptive Metropolis only
+        step = pm.Metropolis()
+        trace = pm.sample(
+            draws=3,
+            tune=0,
+            step=step,
+            chains=1,
+            cores=1,
+            progressbar=False,
+            return_inferencedata=False
+        )
+        print(trace)

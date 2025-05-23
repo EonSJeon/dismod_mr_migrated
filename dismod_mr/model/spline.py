@@ -1,76 +1,99 @@
 import numpy as np
 import pymc as pm
 import scipy.interpolate
-import aesara.tensor as at
-from aesara.compile.ops import as_op
+import pytensor.tensor as at
+from pytensor.graph.op import Op
+from pytensor.tensor.type import TensorType
+import pytensor
+
+# Configure PyTensor to minimize graph/dot printing
+pytensor.config.optimizer = 'fast_compile'
+pytensor.config.profile = False
+pytensor.config.profile_optimizer = False
+pytensor.config.print_graph = False
 
 
-def spline(data_type, ages, knots, smoothing, interpolation_method='linear'):
+class InterpOp(Op):
     """
-    PyMC5 spline model: supports multiple interpolation methods via SciPy wrapped in Aesara.
-    Input/output signature unchanged from PyMC2/3.
+    A PyTensor Op to interpolate exp(gamma_vec) over ages using SciPy.
+    """
+    itypes = [TensorType('float64', (False,))]
+    otypes = [TensorType('float64', (False,))]
+
+    def __init__(self, knots, ages, method):
+        self.knots = np.asarray(knots, dtype=np.float64)
+        self.ages = np.asarray(ages, dtype=np.float64)
+        self.method = method
+        super().__init__()
+
+    def perform(self, node, inputs, outputs):
+        (g,) = inputs
+        # exponentiate gamma
+        exp_g = np.exp(g)
+        f = scipy.interpolate.interp1d(
+            self.knots, exp_g,
+            kind=self.method,
+            bounds_error=False,
+            fill_value=0.0
+        )
+        result = f(self.ages).astype(np.float64)
+        outputs[0][0] = result
+
+    def infer_shape(self, fgraph, node, input_shapes):
+        return [(self.ages.shape[0],)]
+
+
+def spline(data_type: str,
+           ages: np.ndarray,
+           knots: np.ndarray,
+           smoothing: float,
+           interpolation_method: str = 'linear') -> dict:
+    """
+    Create a spline-based age-specific rate model in PyMC using a custom PyTensor Op.
 
     Parameters
     ----------
     data_type : str
-    ages : array-like (N,) points to interpolate to
-    knots : array-like (K,) strictly increasing knot locations
-    smoothing : float smoothing parameter (0 = none, inf = none)
-    interpolation_method : str, one of 'linear','nearest','zero','slinear','quadratic','cubic'
+        Identifier for naming variables.
+    ages : array-like
+        Array of target ages.
+    knots : array-like
+        Strictly increasing array of knot locations.
+    smoothing : float
+        Precision parameter for smoothing prior (0 or inf disables smoothing).
+    interpolation_method : str
+        One of SciPy interp1d kinds: 'linear', 'slinear', 'quadratic', 'cubic', etc.
 
     Returns
     -------
-    dict with keys:
-      'gamma': list of gamma_k RVs,
-      'mu_age': Deterministic tensor of shape (N,),
-      'ages': input ages array,
-      'knots': input knots array
-      'smooth_gamma' (optional): smoothing potential added inside model
+    dict
+        - 'gamma': list of Normal RVs at each knot
+        - 'mu_age': Deterministic RV of interpolated rates at ages
+        - 'ages': original ages array
+        - 'knots': original knots array
     """
-    ages = np.asarray(ages)
-    knots = np.asarray(knots)
-    assert np.all(np.diff(knots) > 0), "Spline knots must be strictly increasing"
+    ages = np.asarray(ages, dtype=np.float64)
+    knots = np.asarray(knots, dtype=np.float64)
+    if not np.all(np.diff(knots) > 0):
+        raise ValueError('Spline knots must be strictly increasing')
 
-    with pm.Model() as spline_model:
-        K = len(knots)
-        # gamma vector: log rates at knots
-        gamma_vec = pm.Normal(
-            f"gamma_{data_type}", mu=0.0, sigma=10.0,
-            initval=np.full(K, -10.0), shape=(K,)
-        )
-        gamma = [gamma_vec[i] for i in range(K)]
+    model = pm.modelcontext(None)
 
-        # wrap SciPy interp in Aesara op
-        @as_op(itypes=[at.dvector], otypes=[at.dvector])
-        def interp_op(g_vals):
-            # g_vals: log-rate at knots
-            f = scipy.interpolate.interp1d(
-                knots,
-                np.exp(g_vals),
-                kind=interpolation_method,
-                bounds_error=False,
-                fill_value=0.0
-            )
-            return f(ages).astype(np.float64)
+    K = len(knots)
+    gamma = [
+        pm.Normal(f"gamma_{data_type}_{i}", mu=0.0, sigma=10.0, initval=0.0)
+        for i in range(K)
+    ]
+    gamma_vec = at.stack(gamma)
 
-        mu_age = pm.Deterministic(
-            f"mu_age_{data_type}", interp_op(gamma_vec)
-        )
+    interp = InterpOp(knots, ages, interpolation_method)
+    mu_age = pm.Deterministic(f"mu_age_{data_type}", interp(gamma_vec))
 
-        # optional smoothing prior
-        if (smoothing > 0) and np.isfinite(smoothing):
-            dg = gamma_vec[1:] - gamma_vec[:-1]
-            dk = knots[1:] - knots[:-1]
-            smooth_val = pm.math.sqrt(pm.math.sum(dg**2 / dk))
-            tau = smoothing**-2
-            pm.Potential(
-                f"smooth_mu_{data_type}",
-                -0.5 * tau * smooth_val**2
-            )
+    if smoothing > 0 and np.isfinite(smoothing):
+        diffs = gamma_vec[1:] - gamma_vec[:-1]
+        intervals = knots[1:] - knots[:-1]
+        smooth_term = at.sqrt(at.sum(diffs**2 / intervals))
+        tau = smoothing**-2
+        pm.Potential(f"smooth_{data_type}", -0.5 * tau * smooth_term**2)
 
-    return {
-        'gamma': gamma,
-        'mu_age': mu_age,
-        'ages': ages,
-        'knots': knots
-    }
+    return {'gamma': gamma, 'mu_age': mu_age, 'ages': ages, 'knots': knots}
