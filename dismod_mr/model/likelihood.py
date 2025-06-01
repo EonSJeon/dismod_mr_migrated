@@ -53,6 +53,8 @@ def binom(name, pi, p, n):
 
     return {'p_obs': p_obs, 'p_pred': p_pred}
 
+ㅇ
+
 def beta_binom(name, pi, p, n):
     """
     Generate PyMC objects for a beta-binomial model
@@ -120,6 +122,8 @@ def beta_binom(name, pi, p, n):
 
     return {'p_n': p_n, 'pi_latent': pi_latent, 'p_obs': p_obs, 'p_pred': p_pred}
 
+ㅇ
+
 def poisson(name, pi, p, n):
     """
     Generate PyMC objects for a Poisson model
@@ -162,6 +166,7 @@ def poisson(name, pi, p, n):
 
     return {'p_obs': p_obs, 'p_pred': p_pred}
 
+ㅇ
 def neg_binom(name, pi, delta, p, n):
     """
     Generate PyMC objects for a negative binomial model
@@ -213,6 +218,8 @@ def neg_binom(name, pi, delta, p, n):
 
     return {'p_obs': p_obs, 'p_pred': p_pred}
 
+ㅇ
+
 def neg_binom_lower_bound(name, pi, delta, p, n):
     """
     Generate PyMC objects for a negative binomial lower bound model
@@ -250,6 +257,9 @@ def neg_binom_lower_bound(name, pi, delta, p, n):
 
     return {'p_obs': p_obs}
 
+ㅇ
+
+# beta_binom은 수동으로 구현한 것, beta_binom_2는 pymc 내장 함수로 구현한 것
 def beta_binom_2(name, pi, delta, p, n):
     """
     Generate PyMC objects for a beta-binomial model with faster computation
@@ -305,6 +315,8 @@ def beta_binom_2(name, pi, delta, p, n):
 
     return {'p_obs': p_obs, 'p_pred': p_pred}
 
+ㅇ
+
 def normal(name, pi, sigma, p, s):
     """
     Generate PyMC objects for a normal model
@@ -342,6 +354,8 @@ def normal(name, pi, sigma, p, s):
         sigma=std
     )
     return {'p_obs': p_obs, 'p_pred': p_pred}
+
+ㅇ
 
 def log_normal(data_type, pi, sigma, p, s):
     """
@@ -392,6 +406,8 @@ def log_normal(data_type, pi, sigma, p, s):
     )
 
     return {'p_obs': p_obs, 'p_pred': p_pred}
+
+ㅇ
 
 def offset_log_normal(name, pi, sigma, p, s):
     """
@@ -456,3 +472,7 @@ def offset_log_normal(name, pi, sigma, p, s):
     )
 
     return {'p_zeta': p_zeta, 'p_obs': p_obs, 'p_pred': p_pred}
+
+ㅇ
+
+

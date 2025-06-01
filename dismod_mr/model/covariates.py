@@ -4,6 +4,7 @@ import pymc as pm
 import networkx as nx
 from typing import Dict, List, Tuple, Any
 import pytensor.tensor as at
+import warnings
 
 SEX_VALUE = {'male': .5, 'total': 0., 'female': -.5}
 
@@ -438,44 +439,97 @@ def mean_covariate_model(data_type: str,
 
 
 
-def dispersion_covariate_model(name: str, input_data: pd.DataFrame,
-                               delta_lb: float,
-                               delta_ub: float) -> Dict[str, Any]:
+def dispersion_covariate_model(
+    name: str,
+    input_data: pd.DataFrame,
+    delta_lb: float,
+    delta_ub: float,
+    model: pm.Model = None
+) -> Dict[str, Any]:
     """
-    Generate dispersion (delta) covariate model.
+    Generate dispersion (delta) covariate model in PyMC v5 style.
+
+    - name:       모델 접두어
+    - input_data: z_ 컬럼이 있는 DataFrame
+    - delta_lb:   delta 하한 (양수)
+    - delta_ub:   delta 상한 (양수)
+    - model:      현재 with pm.Model()로 선언한 Model 객체 
+                  (None이면 새 pm.Model()를 생성하고 경고)
 
     Returns dict with:
-      - eta : Uniform prior on log(delta)
-      - Z : DataFrame of covariates
-      - zeta (optional) : Normal coeffs for Z
-      - delta : Deterministic exp(eta + Z @ zeta)
+      - eta   : list containing Uniform prior on log(delta)
+      - Z     : DataFrame slice of covariates (z_*)
+      - zeta  : list containing Normal 계수 (vector) [있는 경우]
+      - delta : list containing Deterministic exp(eta + Z @ zeta)
     """
-    lower, upper = np.log(delta_lb), np.log(delta_ub)
-    eta = pm.Uniform(f'eta_{name}',
-                     lower=lower,
-                     upper=upper,
-                     initval=0.5 * (lower + upper))
+    # model이 None이면, 테스트 용도로 새 Model 생성하고 경고
+    if model is None:
+        warnings.warn(
+            "New pm.Model() is created. Should be during test",
+            UserWarning
+        )
+        model = pm.Model()
 
-    # select non-constant Z columns
+    lower, upper = np.log(delta_lb), np.log(delta_ub)
+
+    # 1) eta ~ Uniform(log(delta_lb), log(delta_ub))
+    eta = pm.Uniform(
+        f"eta_{name}",
+        lower=lower,
+        upper=upper,
+        initval=0.5 * (lower + upper),
+    )
+
+    # 2) “z_” 로 시작하는 비상수 컬럼만 골라냄
     cols = [
         c for c in input_data.columns
-        if c.startswith('z_') and input_data[c].std() > 0
+        if c.startswith("z_") and input_data[c].std() > 0
     ]
     Z = input_data[cols].copy()
-    if len(Z.columns) > 0:
-        zeta = pm.Normal(f'zeta_{name}',
-                         mu=0.0,
-                         sigma=0.25,
-                         dims=["covariate"],
-                         initval=np.zeros(len(Z.columns)))
-        delta = pm.Deterministic(
-            f'delta_{name}', pm.math.exp(eta + pm.math.dot(Z.values, zeta)))
-        return {'eta': eta, 'Z': Z, 'zeta': zeta, 'delta': delta}
-    else:
-        delta = pm.Deterministic(f'delta_{name}',
-                                 pm.math.exp(eta) * np.ones(len(input_data)))
-        return {'eta': eta, 'delta': delta}
 
+    if len(Z.columns) > 0:
+        # (가) dims("covariate")를 쓰려면 먼저 coord 등록
+        model.add_coord("covariate", Z.columns.tolist(), mutable=False)
+
+        # (나) zeta ~ Normal(0, 0.25) 벡터 (길이 = Z.columns 수)
+        zeta = pm.Normal(
+            f"zeta_{name}",
+            mu=0.0,
+            sigma=0.25,
+            dims=("covariate",),
+            initval=np.zeros(len(Z.columns)),
+        )
+
+        # (다) delta = exp(eta + Z.values @ zeta)
+        #     obs_dim 좌표(=샘플 개수) 등록
+        model.add_coord("obs_dim", np.arange(len(input_data)), mutable=False)
+
+        delta = pm.Deterministic(
+            f"delta_{name}",
+            pm.math.exp(eta + pm.math.dot(Z.values, zeta)),
+            dims=("obs_dim",),
+        )
+
+        return {
+            "eta":   [eta],
+            "Z":      Z,
+            "zeta": [zeta],
+            "delta":[delta],
+        }
+
+    else:
+        # zeta 없이, 단일 η만으로 delta 생성
+        model.add_coord("obs_dim", np.arange(len(input_data)), mutable=False)
+
+        delta = pm.Deterministic(
+            f"delta_{name}",
+            pm.math.exp(eta) * np.ones(len(input_data)),
+            dims=("obs_dim",),
+        )
+        return {
+            "eta":   [eta],
+            "delta":[delta],
+        }
 
 def predict_for(
     model,

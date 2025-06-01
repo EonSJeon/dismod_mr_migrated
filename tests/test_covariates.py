@@ -27,15 +27,15 @@ def test_covariate_model_sim_no_hierarchy():
         "x_0":        X[:, 0],
         "x_1":        X[:, 1],
         "x_2":        X[:, 2],
-        "area":    ["all"] * len(p),
-        "sex":     ["total"] * len(p),
+        "area":       ["all"] * len(p),
+        "sex":        ["total"] * len(p),
         "year_start": [2000] * len(p),
         "year_end":   [2000] * len(p),
     })
     model_data.input_data = df
 
     # 3) Build and sample the PyMC model
-    with pm.Model():
+    with pm.Model() as model:
         # mean_covariate_model will register all RVs (alpha, beta, etc.) into this model
         variables = dismod_mr.model.covariates.mean_covariate_model(
             data_type="test",
@@ -49,13 +49,24 @@ def test_covariate_model_sim_no_hierarchy():
             zero_re=True,
         )
 
+        # Debugging prints: list out which random & deterministic variables were created
+        print("\n=== Variables returned by mean_covariate_model ===")
+        print("Keys:", list(variables.keys()))
+        print("  U (shape):", variables["U"].shape)
+        print("  U.columns:", variables["U"].columns.tolist())
+        print("  sigma_alpha objects:", [rv.name for rv in variables["sigma_alpha"]])
+        print("  alpha RV names:", [rv.name for rv in variables["alpha"]])
+        print("  beta RV names:", [rv.name for rv in variables["beta"]])
+        print("  X_shift:", variables["X_shift"].to_dict())
+
         # Likelihood: p ~ Normal(pi, sigma_true)
-        pm.Normal(
+        obs_rv = pm.Normal(
             "obs",
             mu=variables["pi"],
             sigma=sigma_true,
             observed=p
         )
+        print(f"\nCreated likelihood RV: {obs_rv.name}")
 
         # Sample with NUTS (or Metropolis if you prefer)
         trace = pm.sample(
@@ -67,11 +78,26 @@ def test_covariate_model_sim_no_hierarchy():
             return_inferencedata=False
         )
 
-    # 4) Print posterior means of each β
-    print("Posterior means for β:")
+    # 4) After sampling, print summary of trace for β’s
+    print("\n=== Sampling complete ===")
+    print("Trace vars:", trace.varnames)
     for i in range(3):
         name = f"beta_test_x_{i}"
-        print(f"  {name} ≃ {trace[name].mean():.3f}")
+        if name in trace.varnames:
+            arr = trace.get_values(name)
+            print(f"  {name}: mean={arr.mean():.3f}, std={arr.std():.3f}")
+        else:
+            print(f"  WARNING: {name} not in trace.varnames")
+
+    # 5) Optionally inspect alpha posteriors as well
+    print("\n=== Posterior means for alpha ===")
+    for rv in variables["alpha"]:
+        if rv.name in trace.varnames:
+            arr = trace.get_values(rv.name)
+            print(f"  {rv.name}: mean={arr.mean():.3f}, std={arr.std():.3f}")
+        else:
+            print(f"  {rv.name} not sampled (likely deterministic)")
+
 
 def test_covariate_model_sim_w_hierarchy():
     np.random.seed(123)
@@ -403,45 +429,121 @@ def test_random_effect_priors():
     print("numpy array mu_val:", arr, "shape:", arr.shape)
     assert np.allclose(arr, 0.1), "Expected every entry of mu to be 0.1 for alpha_test_USA"
 
-
-
-
-
 def test_covariate_model_dispersion():
     n = 100
     model_data = dismod_mr.data.ModelData()
-    model_data.hierarchy, model_data.output_template = dismod_mr.testing.data_simulation.small_output()
-    Z = np.random.randint(0,2,size=n)
-    pi_true = 0.1; ess = 10000. * np.ones(n)
-    eta_true = np.log(50); delta_true = 50 + np.exp(eta_true)
-    p = np.random.negative_binomial(pi_true*ess, delta_true*np.exp(Z*(-0.2))) / ess
+    model_data.hierarchy, model_data.output_template = (
+        dismod_mr.testing.data_simulation.small_output()
+    )
 
-    df = pd.DataFrame({'value': p, 'z_0': Z})
-    df['area'] = 'all'; df['sex'] = 'total'; df['year_start'] = 2000; df['year_end'] = 2000
+    # 1) Simulate dispersion‐varying negative‐binomial data
+    np.random.seed(42)
+    Z = np.random.randint(0, 2, size=n)                    # binary covariate
+    pi_true = 0.1
+    ess     = 10000.0 * np.ones(n)
+    eta_true   = np.log(50.0)
+    base_delta = 50.0 + np.exp(eta_true)  # = 100
+    #Allow δ to change by Z: r = base_delta * exp(−0.2·Z)
+    r = base_delta * np.exp(-0.2 * Z)
+    mean_counts = pi_true * ess
+    p_prob = r / (r + mean_counts)                          # in (0,1)
+    counts = np.random.negative_binomial(r.astype(int), p_prob)
+    p = counts / ess                                        # observed rate
+
+    # 2) Build DataFrame
+    df = pd.DataFrame({"value": p, "z_0": Z})
+    df["area"]       = "all"
+    df["sex"]        = "total"
+    df["year_start"] = 2000
+    df["year_end"]   = 2000
     model_data.input_data = df
 
-    with pm.Model():
+    # 3) Construct and sample the PyMC model
+    with pm.Model() as model:
+        # 3a) mean_covariate_model → π 생성
         variables = dismod_mr.model.covariates.mean_covariate_model(
-            data_type='test',
-            mu=1,
+            data_type="test",
+            mu=1.0,
             input_data=model_data.input_data,
             parameters={},
             model=model_data,
-            root_area='all',
-            root_sex='total', 
-            root_year='all'
+            root_area="all",
+            root_sex="total",
+            root_year="all",
         )
-        variables.update(
-            dismod_mr.model.covariates.dispersion_covariate_model(
-                'test', model_data.input_data, 0.1, 10.0
-            )
+
+        # Debug: what mean_covariate_model created
+        print("\n=== mean_covariate_model outputs ===")
+        print("Keys:", list(variables.keys()))
+        print("  U shape:", variables["U"].shape)
+        print("  sigma_alpha names:", [rv.name for rv in variables["sigma_alpha"]])
+        print("  alpha names:", [rv.name for rv in variables["alpha"]])
+        print("  beta names:", [rv.name for rv in variables["beta"]])
+        print("  X_shift:", variables["X_shift"].to_dict())
+
+        # 3b) dispersion_covariate_model → η, δ 생성
+        disp_vars = dismod_mr.model.covariates.dispersion_covariate_model(
+            "test",
+            model_data.input_data,
+            pi_true,      # initial guess for π in dispersion submodel
+            10.0          # initial guess for δ
         )
-        dismod_mr.model.likelihood.neg_binom(
-            'test', variables['pi'], variables['delta'], df['value'], ess
+        variables.update(disp_vars)
+
+        # Debug: what dispersion_covariate_model created
+        print("\n=== dispersion_covariate_model outputs ===")
+        print("  eta names:", [rv.name for rv in disp_vars.get("eta", [])])
+        print("  delta names:", [rv.name for rv in disp_vars.get("delta", [])])
+        if "eta" in disp_vars:
+            for eta_rv in disp_vars["eta"]:
+                print(f"    {eta_rv.name}.owner.op:", type(eta_rv.owner.op).__name__)
+        if "delta" in disp_vars:
+            for delta_rv in disp_vars["delta"]:
+                print(f"    {delta_rv.name}.owner.op:", type(delta_rv.owner.op).__name__)
+
+        # 3c) Negative binomial likelihood
+        print("\n=== Creating negative‐binomial likelihood ===")
+        negbin_rv = dismod_mr.model.likelihood.neg_binom(
+            "test",
+            pi=variables["pi"],
+            delta=variables["delta"],
+            p=model_data.input_data["value"],
+            ess=ess,
         )
-        trace = pm.sample(draws=2, tune=0, step=pm.Metropolis(), chains=1,
-                          cores=1, progressbar=False, return_inferencedata=False)
+        print(f"Created likelihood RV: {negbin_rv.name}, op = {type(negbin_rv.owner.op).__name__}")
+
+        # 3d) Sample with Metropolis (tune=0)
+        trace = pm.sample(
+            draws=2,
+            tune=0,
+            chains=1,
+            cores=1,
+            step=pm.Metropolis(),
+            progressbar=False,
+            return_inferencedata=False,
+        )
+
+    # 4) After sampling, inspect trace
+    print("\n=== Sampling completed ===")
+    print("Trace varnames:", trace.varnames)
+    # Show any sampled η and δ
+    for var in ["eta_test_z_0", "delta_test_z_0"]:
+        if var in trace.varnames:
+            arr = trace.get_values(var)
+            print(f"  {var}: values = {arr}")
+        else:
+            print(f"  {var} not in trace.varnames")
+
+    # Show π in trace (if present) or any other variables
+    if "pi_test" in trace.varnames:
+        pi_arr = trace.get_values("pi_test")
+        print("  pi_test shape:", pi_arr.shape)
+    else:
+        print("  pi_test not sampled")
+
+    print("Full trace summary:")
     print(trace)
+
 
 
 def test_covariate_model_shift_for_root_consistency():

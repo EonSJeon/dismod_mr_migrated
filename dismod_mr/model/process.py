@@ -51,7 +51,13 @@ def age_specific_rate(
     with pm.Model() as model_ctx:
         # 1) age spline prior or reuse
         if mu_age is None:
-            spline_vars = spline.spline(_data_type, ages, knots, smoothing, interpolation_method)
+            spline_vars = spline.spline(
+                data_type=_data_type,
+                ages=ages,
+                knots=knots,
+                smoothing=smoothing,
+                interpolation_method=interpolation_method
+            )
             vars.update(spline_vars)
         else:
             vars['mu_age'] = mu_age
@@ -82,7 +88,8 @@ def age_specific_rate(
                 _data_type,
                 np.ones_like(vars['mu_age'].eval()),
                 vars['mu_age'],
-                data['age_start'], data['age_end'], ages
+                data['age_start'], data['age_end'], ages,
+                model=model_ctx
             )
             vars.update(age_int)
 
