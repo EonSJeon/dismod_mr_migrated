@@ -36,6 +36,27 @@ def debug_hierarchy(hierarchy):
         print(f"  - {node}: {nbrs}")
     print()
 
+def MyTruncatedNormal(name, mu, sigma, lower, upper, initval):
+    # 1) latent unconstrained
+    z = pm.Normal(f"{name}_z", mu=0, sigma=1)
+    # 2) map into [lower,upper]
+    sigma = pm.Deterministic(name,
+        lower + (upper - lower) * pm.math.sigmoid(z)
+    )
+    # 3) compute logZ and jacobian
+    sqrt2 = np.sqrt(2.0)
+    a = (lower - mu) / (sigma * sqrt2)
+    b = (upper - mu) / (sigma * sqrt2)
+    logZ = at.log(0.5 * (at.erf(b) - at.erf(a)))
+    logp = (
+        -0.5 * ((sigma - mu)/sigma)**2
+        - at.log(sigma * at.sqrt(2*np.pi))
+        - logZ
+        + at.log((upper-lower) * pm.math.sigmoid(z)*(1-pm.math.sigmoid(z)))
+    )
+    # 4) inject as potential
+    pm.Potential(f"{name}_trunc", logp)
+    return sigma
 
 def build_random_effects_matrix(
     input_data: pd.DataFrame,
@@ -113,34 +134,51 @@ def build_random_effects_matrix(
     return U, U_shift
 
 
-def build_sigma_alpha(data_type: str,
-                      parameters: Dict[str, Any],
-                      max_depth: int = 5) -> List[Any]:
+
+def build_sigma_alpha(
+    data_type: str,
+    parameters: Dict[str, Any],
+    max_depth: int = 5
+) -> List[Any]:
     """
-    Generate TruncatedNormal priors for hierarchical sigma_alpha.
+    Generate hierarchical sigma_alpha priors via MyTruncatedNormal,
+    preserving the original defaults from x_build_sigma_alpha.
     """
     sigma_alpha: List[Any] = []
     re_specs = parameters.get('random_effects', {})
+
     for i in range(max_depth):
         name = f'sigma_alpha_{data_type}_{i}'
         spec = re_specs.get(name)
+
         if spec:
+            # 사용자 지정 하이퍼 prior
             mu = float(spec['mu'])
-            tau = max(float(spec.get('sigma', 1e-3)), 1e-3)**-2
+            s0 = max(float(spec['sigma']), 1e-3)
             lb = min(mu, spec['lower'])
             ub = max(mu, spec['upper'])
+            init = float(spec['mu'])
         else:
-            mu, tau, lb, ub = 0.05, 0.03**-2, 0.05, 0.5
-        sigma = 1.0 / np.sqrt(tau)
+            # 원래의 기본값 유지
+            mu = 0.05
+            s0 = 0.03
+            lb = 0.05
+            ub = 0.5
+            init = 0.1
+
         sigma_alpha.append(
-            pm.TruncatedNormal(name=name,
-                               mu=mu,
-                               sigma=sigma,
-                               lower=lb,
-                               upper=ub,
-                               initval=mu,
-                               transform=None))
+            MyTruncatedNormal(
+                name=name,
+                mu=mu,
+                sigma=s0,
+                lower=lb,
+                upper=ub,
+                initval=init
+            )
+        )
+
     return sigma_alpha
+
 
 
 def build_alpha(
@@ -152,66 +190,113 @@ def build_alpha(
     hierarchy: nx.DiGraph,
 ) -> Tuple[List[Any], List[float], List[Any]]:
     """
-    Generate random-effect coefficients alpha, constants and potentials.
+    랜덤 효과 계수 alpha, 상수 sigma 리스트, sum-to-zero potential 리스트 생성
+
+    :param data_type: 파라미터 종류 문자열 (예: 'p', 'i' 등)
+    :param U: 각 노드별 디자인 행렬 (DataFrame, 컬럼 이름이 노드명)
+    :param sigma_alpha: level별 랜덤 효과 표준편차 RV 리스트
+    :param parameters: user-specified prior 설정 dict
+    :param zero_re: sum-to-zero 제약 적용 여부
+    :param hierarchy: area hierarchy (DiGraph)
+    :returns: (alpha 리스트, const_alpha_sigma 리스트, alpha_potentials 리스트)
     """
     alpha: List[Any] = []
     const_alpha_sigma: List[float] = []
     alpha_potentials: List[Any] = []
+
+    # U에 컬럼이 없으면 바로 반환
     if U.shape[1] == 0:
         return alpha, const_alpha_sigma, alpha_potentials
 
-    tau_list = [
-        1.0 / (sigma_alpha[hierarchy.nodes[c]['level']].distribution.sigma**2)
+    # 1) 각 컬럼(node)에 대응하는 sigma_alpha[level] 값 추출
+    sigma_list = [
+        sigma_alpha[hierarchy.nodes[c]['level']]
         for c in U.columns
     ]
-    for col, tau in zip(U.columns, tau_list):
+    print(sigma_list)
+
+    # 2) 각 노드마다 alpha RV 정의
+    for col, sigma in zip(U.columns, sigma_list):
         name = f'alpha_{data_type}_{col}'
         spec = parameters.get('random_effects', {}).get(col)
+
         if spec:
+            # 사용자 지정 prior이 있으면 그에 맞춰 분포 생성
             dist = spec['dist']
             if dist == 'Normal':
                 mu0, s0 = float(spec['mu']), float(spec['sigma'])
                 rv = pm.Normal(name, mu=mu0, sigma=s0, initval=0.0)
             elif dist == 'TruncatedNormal':
                 mu0 = float(spec['mu'])
-                tau0 = max(float(spec['sigma']), 1e-3)**-2
-                rv = pm.TruncatedNormal(name,
-                                        mu=mu0,
-                                        sigma=1 / np.sqrt(tau0),
-                                        lower=spec['lower'],
-                                        upper=spec['upper'],
-                                        initval=0.0)
+                s0  = max(float(spec['sigma']), 1e-3)
+                lb, ub = spec['lower'], spec['upper']
+                rv = MyTruncatedNormal(
+                    name=name,
+                    mu=mu0,
+                    sigma=s0,
+                    lower=lb,
+                    upper=ub,
+                    initval=0.0
+                )
             elif dist == 'Constant':
+                # 상수 prior인 경우 float로 처리
                 rv = float(spec['mu'])
             else:
                 raise ValueError(f"Unknown dist {dist} for {name}")
         else:
-            rv = pm.Normal(name, mu=0.0, sigma=1.0 / np.sqrt(tau), initval=0.0)
-        alpha.append(rv)
-        const_alpha_sigma.append(
-            float(spec.get('sigma', np.nan)
-                  ) if spec and spec.get('dist') == 'Constant' else np.nan)
+            # 기본 Normal(0, sigma_alpha[level]) prior
+            rv = pm.Normal(name, mu=0.0, sigma=sigma, initval=0.0)
 
+        alpha.append(rv)
+
+        # Constant prior인 경우 상수 sigma 기록, 아니면 NaN
+        const_alpha_sigma.append(
+            float(spec.get('sigma', np.nan))
+            if spec and spec.get('dist') == 'Constant'
+            else np.nan
+        )
+
+    # 3) sum-to-zero 제약 (zero_re=True) 처리
     if zero_re:
         idx_map = {c: i for i, c in enumerate(U.columns)}
         for parent in hierarchy.nodes:
+            # 자식 노드 중 U.columns에 있는 것만 필터
             children = [
-                c for c in hierarchy.successors(parent) if c in idx_map
+                c for c in hierarchy.successors(parent)
+                if c in idx_map
             ]
-            if not children: continue
+            # 형제가 2개 이상일 때만 sum-to-zero 제약 적용
+            if len(children) < 2:
+                continue
+
+            # 첫 번째 자식 인덱스
             i0 = idx_map[children[0]]
             spec0 = parameters.get('random_effects', {}).get(children[0])
-            if spec0 and spec0.get('dist') == 'Constant': continue
+            # 첫 자식이 Constant prior이면 건너뛰기
+            if spec0 and spec0.get('dist') == 'Constant':
+                continue
+
+            # 나머지 형제들 인덱스
             sibs = [idx_map[c] for c in children[1:]]
-            det = pm.Deterministic(f'alpha_det_{data_type}_{i0}',
-                                   -sum(alpha[i] for i in sibs))
+            # alpha[i0] = - sum(alpha[sibs])
+            det = pm.Deterministic(
+                f'alpha_det_{data_type}_{i0}',
+                -sum(alpha[i] for i in sibs)
+            )
             old = alpha[i0]
             alpha[i0] = det
+
+            # 기존 stochastic이면 그 logp를 Potential로 보존
             if isinstance(old, pm.Distribution):
                 alpha_potentials.append(
-                    pm.Potential(f'alpha_pot_{data_type}_{children[0]}',
-                                 old.logp(det)))
+                    pm.Potential(
+                        f'alpha_pot_{data_type}_{children[0]}',
+                        old.logp(det)
+                    )
+                )
+
     return alpha, const_alpha_sigma, alpha_potentials
+
 
 
 def mean_covariate_model(data_type: str,
@@ -242,7 +327,13 @@ def mean_covariate_model(data_type: str,
     U, U_shift = build_random_effects_matrix(input_data, model, root_area, parameters)
     sigma_alpha = build_sigma_alpha(data_type, parameters)
     alpha, const_alpha_sigma, alpha_potentials = build_alpha(
-        data_type, U, sigma_alpha, parameters, zero_re, model.hierarchy)
+        data_type=data_type,
+        U=U,
+        sigma_alpha=sigma_alpha,
+        parameters=parameters,
+        zero_re=zero_re,
+        hierarchy=model.hierarchy
+    )
 
 
     # --- 2) 고정효과(covariate) 행렬 구성 ---
@@ -256,7 +347,6 @@ def mean_covariate_model(data_type: str,
     tpl = model.output_template.groupby(['area', 'sex', 'year']).mean()
     # covariate 및 pop 열만 선택 (없는 열은 reindex로 0으로 채움)
     covs = tpl.reindex(columns=list(X.columns) + ['pop'], fill_value=0)
-
 
     # 계층구조에서 리프 노드(하위 노드 없는 영역) 추출
     leaves = [n for n in nx.bfs_tree(model.hierarchy, root_area)
@@ -286,13 +376,16 @@ def mean_covariate_model(data_type: str,
         if spec:
             dist = spec['dist']
             if dist == 'TruncatedNormal':
-                tau = spec['sigma']**-2
                 beta.append(
-                    pm.TruncatedNormal(name,
-                                       mu=spec['mu'],
-                                       sigma=1/np.sqrt(tau),
-                                       lower=spec['lower'],
-                                       upper=spec['upper']))
+                    MyTruncatedNormal(
+                        name=name,
+                        mu=float(spec['mu']),
+                        sigma=max(float(spec['sigma']), 1e-3),
+                        lower=float(spec['lower']),
+                        upper=float(spec['upper']),
+                        initval=float(spec['mu'])
+                    )
+                )
             else:
                 # 기본 Normal 분포 사용
                 beta.append(pm.Normal(name,
