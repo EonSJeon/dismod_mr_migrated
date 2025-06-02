@@ -17,7 +17,7 @@ def test_age_specific_rate_model():
     a = np.arange(0, 100, 1)
     pi_age_true = .0001 * (a * (100. - a) + 100.)
 
-    d = dismod_mr.data.ModelData()
+    d = dismod_mr.data.MRModel()
     d.input_data = data_simulation.simulated_age_intervals(data_type, n, a, pi_age_true, sigma_true)
     d.hierarchy, d.output_template = data_simulation.small_output()
 
@@ -57,7 +57,7 @@ def test_age_specific_rate_model_w_lower_bound_data():
     a = np.arange(0, 100, 1)
     pi_age_true = .0001 * (a * (100. - a) + 100.)
 
-    d = dismod_mr.data.ModelData()
+    d = dismod_mr.data.MRModel()
     d.input_data = data_simulation.simulated_age_intervals(data_type, n, a, pi_age_true, sigma_true)
     d.input_data = d.input_data.append(data_simulation.simulated_age_intervals('pf', n, a, pi_age_true*2., sigma_true),
                                        ignore_index=True)
@@ -79,7 +79,7 @@ def test_age_specific_rate_model_w_lower_bound_data():
 
 
 def test_consistent():
-    dm = dismod_mr.data.ModelData()
+    dm = dismod_mr.data.MRModel()
     dm.hierarchy, dm.output_template = data_simulation.small_output()
 
     # create model and priors
@@ -99,7 +99,7 @@ def test_consistent():
 
 
 def test_consistent_w_non_integral_ages():
-    dm = dismod_mr.data.ModelData()
+    dm = dismod_mr.data.MRModel()
     dm.hierarchy, dm.output_template = data_simulation.small_output()
 
     # change to non-integral ages

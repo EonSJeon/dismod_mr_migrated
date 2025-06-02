@@ -8,34 +8,7 @@ import warnings
 
 SEX_VALUE = {'male': .5, 'total': 0., 'female': -.5}
 
-def debug_hierarchy(hierarchy):
-    """
-    Print detailed information about a NetworkX DiGraph without using nx.info(),
-    so it works even if that function isn’t available.
-    """
-    # 1) 간단한 요약
-    n_nodes = hierarchy.number_of_nodes()
-    n_edges = hierarchy.number_of_edges()
-    print(f"Hierarchy summary: {n_nodes} nodes, {n_edges} edges\n")
 
-    # 2) 노드 리스트
-    print("Nodes:")
-    for node in hierarchy.nodes():
-        print(f"  - {node}")
-    print()
-
-    # 3) 엣지 리스트 (parent -> child)
-    print("Edges:")
-    for parent, child in hierarchy.edges():
-        print(f"  - {parent} → {child}")
-    print()
-
-    # 4) 인접 리스트
-    print("Adjacency list:")
-    for node, neighbors in hierarchy.adjacency():
-        nbrs = list(neighbors)
-        print(f"  - {node}: {nbrs}")
-    print()
 
 def MyTruncatedNormal(name, mu, sigma, lower, upper, initval):
     # 1) latent unconstrained
@@ -439,73 +412,84 @@ def mean_covariate_model(data_type: str,
 
 
 
+import numpy as np
+import pandas as pd
+import pymc as pm
+from typing import Any, Dict
+
+
 def dispersion_covariate_model(
-    name: str,
+    data_type: str,
     input_data: pd.DataFrame,
     delta_lb: float,
     delta_ub: float,
-    model: pm.Model = None
 ) -> Dict[str, Any]:
     """
-    Generate dispersion (delta) covariate model in PyMC v5 style.
+    Generate dispersion (delta) covariate model in PyMC 5.3 style.
 
-    - name:       모델 접두어
-    - input_data: z_ 컬럼이 있는 DataFrame
-    - delta_lb:   delta 하한 (양수)
-    - delta_ub:   delta 상한 (양수)
-    - model:      현재 with pm.Model()로 선언한 Model 객체 
-                  (None이면 새 pm.Model()를 생성하고 경고)
+    Parameters
+    ----------
+    data_type : str
+        모델 접두어 (예: 'p', 'i', 'r' 등)
+    input_data : pd.DataFrame
+        공변량(z_*) 컬럼이 포함된 DataFrame
+    delta_lb : float
+        delta 하한 (양수)
+    delta_ub : float
+        delta 상한 (양수)
 
-    Returns dict with:
-      - eta   : list containing Uniform prior on log(delta)
-      - Z     : DataFrame slice of covariates (z_*)
-      - zeta  : list containing Normal 계수 (vector) [있는 경우]
-      - delta : list containing Deterministic exp(eta + Z @ zeta)
+    Returns
+    -------
+    Dict[str, Any]
+        - eta   : [Uniform RV on log(delta)]
+        - Z     : DataFrame slice of z_* covariates (원본 DataFrame에서 복사본)
+        - zeta  : [Normal RV vector]  # Z가 있을 때만 반환
+        - delta : [Deterministic]      # exp(eta + Z @ zeta) 또는 exp(eta) * ones
     """
-    # model이 None이면, 테스트 용도로 새 Model 생성하고 경고
-    if model is None:
-        warnings.warn(
-            "New pm.Model() is created. Should be during test",
-            UserWarning
-        )
-        model = pm.Model()
+    # ─── 0) 현재 PyMC 모델 컨텍스트를 가져와야 합니다 ─────────────────────────
+    model = pm.modelcontext(None)
+    assert model is not None, "dispersion_covariate_model must be called within a PyMC model"
 
-    lower, upper = np.log(delta_lb), np.log(delta_ub)
+    # ─── 1) log(delta)의 하한/상한 계산 ──────────────────────────────────────
+    lower = np.log(delta_lb)
+    upper = np.log(delta_ub)
 
-    # 1) eta ~ Uniform(log(delta_lb), log(delta_ub))
+    # ─── 2) eta ~ Uniform(log(delta_lb), log(delta_ub)) ────────────────────
     eta = pm.Uniform(
-        f"eta_{name}",
+        f"eta_{data_type}",
         lower=lower,
         upper=upper,
         initval=0.5 * (lower + upper),
+        # dims 지정은 필요 없으므로 생략
     )
 
-    # 2) “z_” 로 시작하는 비상수 컬럼만 골라냄
-    cols = [
+    # ─── 3) “z_” 로 시작하고 분산(std) > 0인 컬럼만 골라냄 ─────────────────────
+    keep_cols = [
         c for c in input_data.columns
         if c.startswith("z_") and input_data[c].std() > 0
     ]
-    Z = input_data[cols].copy()
+    Z = input_data[keep_cols].copy()
 
+    # ─── 4) Z가 하나라도 있을 때 ───────────────────────────────────────────
     if len(Z.columns) > 0:
-        # (가) dims("covariate")를 쓰려면 먼저 coord 등록
+        # (가) “covariate” 차원(coord) 먼저 등록
         model.add_coord("covariate", Z.columns.tolist(), mutable=False)
 
-        # (나) zeta ~ Normal(0, 0.25) 벡터 (길이 = Z.columns 수)
+        # (나) zeta ~ Normal(0, 0.25) 벡터, 길이 = len(Z.columns)
         zeta = pm.Normal(
-            f"zeta_{name}",
+            f"zeta_{data_type}",
             mu=0.0,
             sigma=0.25,
             dims=("covariate",),
             initval=np.zeros(len(Z.columns)),
         )
 
-        # (다) delta = exp(eta + Z.values @ zeta)
-        #     obs_dim 좌표(=샘플 개수) 등록
+        # (다) “obs_dim” 차원(coord) 등록 (관측 개수만큼)
         model.add_coord("obs_dim", np.arange(len(input_data)), mutable=False)
 
+        # (라) delta = exp(eta + Z.values @ zeta) 를 Deterministic으로 등록
         delta = pm.Deterministic(
-            f"delta_{name}",
+            f"delta_{data_type}",
             pm.math.exp(eta + pm.math.dot(Z.values, zeta)),
             dims=("obs_dim",),
         )
@@ -514,22 +498,32 @@ def dispersion_covariate_model(
             "eta":   [eta],
             "Z":      Z,
             "zeta": [zeta],
-            "delta":[delta],
+            "delta": [delta],
         }
 
+    # ─── 5) Z가 없을 때 ────────────────────────────────────────────────────
     else:
-        # zeta 없이, 단일 η만으로 delta 생성
+        # (가) “obs_dim” 차원(coord) 등록
         model.add_coord("obs_dim", np.arange(len(input_data)), mutable=False)
 
-        delta = pm.Deterministic(
-            f"delta_{name}",
+        # (나) delta = exp(eta) * ones(len(input_data)) 형태로 생성
+        const_delta = pm.Deterministic(
+            f"delta_{data_type}",
             pm.math.exp(eta) * np.ones(len(input_data)),
             dims=("obs_dim",),
         )
+
         return {
             "eta":   [eta],
-            "delta":[delta],
+            "Z":      Z,            # 빈 DataFrame일 수도 있음
+            "zeta": [],             # 공변량이 없으므로 빈 리스트
+            "delta": [const_delta],
         }
+
+
+import numpy as np
+import networkx as nx
+import pandas as pd
 
 def predict_for(
     model,
@@ -541,109 +535,153 @@ def predict_for(
     sex,
     year,
     population_weighted: bool,
-    vars,
-    lower,
-    upper
-):
+    vars: dict[str, any],
+    lower: float,
+    upper: float
+) -> np.ndarray:
     """
-    Generate posterior predictive draws for a specific (area, sex, year).
+    Generate posterior-predictive draws for a specific (area, sex, year).
 
-    Returns an array of draws from the model’s posterior predictive distribution,
-    optionally aggregating across sub‑areas with population weighting.
+    This version expects that you've already done something like
+        with pm.Model() as _:
+            … build the model …
+            idata = pm.sample(…)
+        model.idata = idata
+
+    and that each RV (mu_age, alpha_*, beta_*, etc.) is recorded in idata.posterior.
+
+    Returns
+    -------
+    preds : np.ndarray
+        An array of shape (n_samples, n_ages) containing posterior draws 
+        of the predicted rate for every age, clipped to [lower, upper].
     """
-    # Number of posterior samples
-    mu_node = vars['mu_age']
-    mu_trace = mu_node.trace()  # shape: (n_samples, n_ages)
+
+    # 1) Grab the InferenceData object:
+    if not hasattr(model, "idata"):
+        raise AssertionError("`model.idata` not found.  You must call pm.sample() inside the model and store the result as model.idata.")
+
+    idata = model.idata
+
+    # 2) Extract posterior draws of mu_age:
+    mu_var = vars["mu_age"]       # this is the TensorVariable used for mu_age
+    mu_name = mu_var.name         # e.g. "value_constrained_mu_age_p"
+    if mu_name not in idata.posterior:
+        raise KeyError(f"`{mu_name}` not found in idata.posterior.  Did you store the model trace in `model.idata`?")
+    # idata.posterior[mu_name].values  has shape (n_chain, n_draw, n_ages)
+    arr = idata.posterior[mu_name].values
+    n_chain, n_draw, n_ages = arr.shape
+    mu_trace = arr.reshape((n_chain * n_draw, n_ages))
     n_samples = mu_trace.shape[0]
 
-    # Assemble random effect traces
+    # 3) Build alpha_trace (random effects):
+    #    If vars["alpha"] is present, it is a list of alpha-nodes;
+    #    we look up each node’s posterior draws by name.  If a node was a constant (no trace),
+    #    we simulate n_samples normal draws with the given “const_alpha_sigma” precision.
     alpha_trace = np.empty((n_samples, 0))
-    if 'alpha' in vars and isinstance(vars['alpha'], list) and vars['alpha']:
+    if "alpha" in vars and isinstance(vars["alpha"], list) and vars["alpha"]:
         traces = []
-        for node, sigma in zip(vars['alpha'], vars['const_alpha_sigma']):
-            if hasattr(node, 'trace'):
-                traces.append(node.trace())
+        for alpha_node, sigma_const in zip(vars["alpha"], vars["const_alpha_sigma"]):
+            name_alpha = alpha_node.name
+            if name_alpha in idata.posterior:
+                arr_a = idata.posterior[name_alpha].values  # (chain, draw)
+                traces.append(arr_a.reshape(n_chain * n_draw))
             else:
-                sig = max(sigma, 1e-9)
-                traces.append(
-                    np.random.normal(loc=float(node), scale=1/np.sqrt(sig), size=n_samples)
-                )
-        alpha_trace = np.vstack(traces).T
+                # treat alpha_node as a constant → simulate draws from Normal(loc=alpha_node, var=1/sigma_const)
+                sig = max(sigma_const, 1e-9)
+                loc = float(alpha_node)
+                draws = np.random.normal(loc=loc, scale=1.0 / np.sqrt(sig), size=n_samples)
+                traces.append(draws)
+        alpha_trace = np.column_stack(traces)  # shape = (n_samples, len(vars["alpha"]))
 
-    # Assemble fixed effect traces
+    # 4) Build beta_trace (fixed effects), same logic as alpha:
     beta_trace = np.empty((n_samples, 0))
-    if 'beta' in vars and isinstance(vars['beta'], list) and vars['beta']:
+    if "beta" in vars and isinstance(vars["beta"], list) and vars["beta"]:
         traces = []
-        for node, sigma in zip(vars['beta'], vars['const_beta_sigma']):
-            if hasattr(node, 'trace'):
-                traces.append(node.trace())
+        for beta_node, sigma_const in zip(vars["beta"], vars["const_beta_sigma"]):
+            name_beta = beta_node.name
+            if name_beta in idata.posterior:
+                arr_b = idata.posterior[name_beta].values  # (chain, draw)
+                traces.append(arr_b.reshape(n_chain * n_draw))
             else:
-                sig = max(sigma, 1e-9)
-                traces.append(
-                    np.random.normal(loc=float(node), scale=1/np.sqrt(sig), size=n_samples)
-                )
-        beta_trace = np.vstack(traces).T
+                sig = max(sigma_const, 1e-9)
+                loc = float(beta_node)
+                draws = np.random.normal(loc=loc, scale=1.0 / np.sqrt(sig), size=n_samples)
+                traces.append(draws)
+        beta_trace = np.column_stack(traces)  # shape = (n_samples, len(vars["beta"]))
 
-    # Determine leaves under area
-    leaves = [n for n in nx.bfs_tree(model.hierarchy, area)
-              if model.hierarchy.out_degree(n) == 0]
+    # 5) Identify all leaf‐nodes under the requested “area”:
+    leaves = [
+        n for n in nx.bfs_tree(model.hierarchy, area) 
+        if model.hierarchy.out_degree(n) == 0
+    ]
     if not leaves:
         leaves = [area]
 
-    # Prepare design matrices
+    # 6) Build a DataFrame of covariates/pop for each (area, sex, year):
+    #    We assume `model.output_template` is a DataFrame with columns [area, sex, year, pop, ... covariates ...].
     output = model.output_template.copy()
-    grp = output.groupby(['area','sex','year']).mean()
+    grp = output.groupby(["area", "sex", "year"], as_index=False).mean().set_index(["area", "sex", "year"])
 
-    # Covariates
-    if 'X' in vars and not vars['X'].empty:
-        X_df = grp.filter(vars['X'].columns).copy()
-        if 'x_sex' in X_df.columns:
-            X_df['x_sex'] = SEX_VALUE[sex]
-        # center
-        X_df = X_df - vars['X_shift']
+    # 7) Prepare X_df (centered covariates) for the target (leaf, sex, year):
+    if "X" in vars and not vars["X"].empty:
+        X_df = grp.filter(vars["X"].columns, axis=1).copy()
+        # set the “x_sex” column to the coded value for this sex:
+        if "x_sex" in X_df.columns:
+            # Here you need a mapping like SEX_VALUE = {"male": -0.5, "female": +0.5}
+            X_df["x_sex"] = SEX_VALUE[sex]
+        # subtract the shifts:
+        X_df = X_df - vars["X_shift"]
     else:
         X_df = pd.DataFrame(index=grp.index)
 
-    # Random-effects indicator
-    if 'U' in vars and not vars['U'].empty:
-        U_cols = vars['U'].columns
+    # 8) Prepare an all‐zero U_row Series; we’ll refill it for each leaf:
+    if "U" in vars and not vars["U"].empty:
+        U_cols = vars["U"].columns
         U_row = pd.Series(0.0, index=U_cols)
     else:
         U_row = pd.Series(dtype=float)
 
-    # Aggregate
+    # 9) Loop over each leaf to build “cov_shift” (shape = (n_samples,)):
     cov_shift = np.zeros(n_samples)
     total_weight = 0.0
+
     for leaf in leaves:
-        # build U indicator along path
+        # 9a) Build U‐indicator: 1 if this leaf is in that random‐effect, else 0,
+        #     minus any “shift” for that area:
         U_row[:] = 0.0
         path = nx.shortest_path(model.hierarchy, root_area, leaf)
         for node in path[1:]:
             if node in U_row.index:
-                U_row[node] = 1.0 - vars['U_shift'].get(node, 0.0)
+                U_row[node] = 1.0 - vars["U_shift"].get(node, 0.0)
+        # Now compute α · U_row → (n_samples,) vector:
+        if alpha_trace.size > 0:
+            log_shift = alpha_trace.dot(U_row.values)  # shape=(n_samples,)
+        else:
+            log_shift = np.zeros(n_samples)
 
-        log_shift = alpha_trace.dot(U_row.values)
+        # 9b) Add fixed‐effect contribution, if any:
+        if beta_trace.size and (leaf, sex, year) in X_df.index:
+            x_vals = X_df.loc[(leaf, sex, year)].values   # length = #covariates
+            log_shift = log_shift + beta_trace.dot(x_vals)
 
-        # fixed effects
-        if not beta_trace.size and (leaf, sex, year) in X_df.index:
-            x_vals = X_df.loc[(leaf, sex, year)].values
-            log_shift += beta_trace.dot(x_vals)
-
-        pop = grp.at[(leaf, sex, year), 'pop']
+        # 9c) Weight by population (or just average if not population_weighted):
+        pop = float(grp.at[(leaf, sex, year), "pop"])
         if population_weighted:
             cov_shift += np.exp(log_shift) * pop
             total_weight += pop
         else:
             cov_shift += log_shift
-            total_weight += 1
+            total_weight += 1.0
 
+    # 10) Finish aggregation across leaves:
     if population_weighted:
-        cov_shift /= total_weight
+        cov_shift = cov_shift / total_weight     # shape = (n_samples,)
     else:
+        # if not population‐weighting, we took the sum of log_shift; divide by #leaves:
         cov_shift = np.exp(cov_shift / total_weight)
 
-    # Combine with baseline mu_age draws and clip
-    # mu_trace: (n_samples, n_ages)
-    # need age index for the target year/sex? here just multiply each draw
-    preds = mu_trace * cov_shift[:, None]
+    # 11) Combine with baseline mu_age draws and clip:
+    #     mu_trace has shape (n_samples, n_ages), cov_shift[:, None] has shape (n_samples, 1)
+    preds = mu_trace * cov_shift[:, None]         # shape = (n_samples, n_ages)
     return np.clip(preds, lower, upper)

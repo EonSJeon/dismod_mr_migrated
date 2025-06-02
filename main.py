@@ -21,8 +21,8 @@ from tests import *
 
 # ===============================================
 # test_covariates.py
-# print("test_covariates.test_covariate_model_sim_no_hierarchy()")
-# test_covariates.test_covariate_model_sim_no_hierarchy()
+print("test_covariates.test_covariate_model_sim_no_hierarchy()")
+test_covariates.test_covariate_model_sim_no_hierarchy()
 
 # print("test_covariates.test_covariate_model_sim_w_hierarchy()")
 # test_covariates.test_covariate_model_sim_w_hierarchy()
@@ -33,8 +33,8 @@ from tests import *
 # print("test_covariates.test_random_effect_priors()")
 # test_covariates.test_random_effect_priors()
 
-print("test_covariates.test_covariate_model_dispersion()")
-test_covariates.test_covariate_model_dispersion()
+# print("test_covariates.test_covariate_model_dispersion()")
+# test_covariates.test_covariate_model_dispersion()
 
 # print("test_covariates.test_covariate_model_shift_for_root_consistency()")
 # test_covariates.test_covariate_model_shift_for_root_consistency()

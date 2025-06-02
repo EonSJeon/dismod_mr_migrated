@@ -5,6 +5,7 @@ import warnings
 import networkx as nx
 from typing import Dict, List, Tuple, Any
 import pytensor.tensor as at   # ← import cumsum, etc.
+import pytensor   # 추가된 import
 
 # ------------------------------
 # Age integrating models
@@ -13,41 +14,35 @@ import pytensor.tensor as at   # ← import cumsum, etc.
 def age_standardize_approx(
     name: str,
     age_weights: np.ndarray,
-    mu_age: pytensor.tensor.var.TensorVariable,
+    mu_age: at.TensorVariable,
     age_start: np.ndarray,
     age_end: np.ndarray,
     ages: np.ndarray,
-    model: pm.Model = None
 ) -> Dict[str, Any]:
     """
     Approximate interval average of mu_age over [age_start, age_end] with weights.
     Returns dict with 'mu_interval' deterministic.
     """
-
+    assert pm.modelcontext(None) is not None, 'age_standardize_approx must be called within a PyMC model'
     # cumulative weights
     cum_wt = np.cumsum(age_weights)
     # indices
     start_idx = (age_start.__array__().clip(ages[0], ages[-1]) - ages[0]).astype(int)
     end_idx = (age_end.__array__().clip(ages[0], ages[-1]) - ages[0]).astype(int)
-    # cumulative weighted mu (use pytensor’s cumsum, not pm.math)
+    # cumulative weighted mu (use pytensor's cumsum, not pm.math)
 
-    if model is None:
-        model = pm.Model()
-        print("Should be during test")
-
-    with model:
-        cum_mu = pm.Deterministic(
-            f"cum_sum_mu_{name}",
-            at.cumsum(mu_age * age_weights)
-        )
-        # compute interval means
-        vals = (cum_mu[end_idx] - cum_mu[start_idx]) / (cum_wt[end_idx] - cum_wt[start_idx])
-        # correct zero-length intervals
-        eq = start_idx == end_idx
-        if np.any(eq):
-            vals = vals.copy()
-            vals[eq] = mu_age[start_idx[eq]]
-        mu_interval = pm.Deterministic(f"mu_interval_{name}", vals)
+    cum_mu = pm.Deterministic(
+        f"cum_sum_mu_{name}",
+        at.cumsum(mu_age * age_weights)
+    )
+    # compute interval means
+    vals = (cum_mu[end_idx] - cum_mu[start_idx]) / (cum_wt[end_idx] - cum_wt[start_idx])
+    # correct zero-length intervals
+    eq = start_idx == end_idx
+    if np.any(eq):
+        vals = vals.copy()
+        vals[eq] = mu_age[start_idx[eq]]
+    mu_interval = pm.Deterministic(f"mu_interval_{name}", vals)
 
     return { 'mu_interval': mu_interval }
 

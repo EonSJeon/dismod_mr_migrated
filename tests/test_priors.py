@@ -8,7 +8,7 @@ import dismod_mr
 
 
 def test_prior_level_constraint():
-    d = dismod_mr.data.ModelData()
+    d = dismod_mr.data.MRModel()
     ages = np.arange(101)
 
     # create model with no priors
@@ -36,7 +36,7 @@ def test_prior_level_constraint():
 
 
 def test_prior_derivative_sign():
-    d = dismod_mr.data.ModelData()
+    d = dismod_mr.data.MRModel()
     ages = np.arange(101)
 
     # create model with no priors

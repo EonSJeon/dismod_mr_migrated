@@ -5,7 +5,8 @@ import dismod_mr
 import numba
 import networkx as nx
 import json
-
+import re
+import os
 
 def my_stats(self, alpha: float = 0.05, start: int = 0, batches: int = 100,
              chain=None, quantiles=(2.5, 25, 50, 75, 97.5)) -> dict:
@@ -136,7 +137,7 @@ class ModelVars(dict):
                 prior_dict[t] = pdt
         return prior_dict
 
-class ModelData:
+class MRModel:
     """
     Holds input data, parameters, hierarchy, and model variables.
     Provides loading, filtering, describing, plotting, fitting, and saving.
@@ -179,7 +180,7 @@ class ModelData:
         print(f'kept {len(self.input_data)} rows of data')
 
     @staticmethod
-    def load(path: str) -> 'ModelData':
+    def load(path: str) -> 'MRModel':
         def load_jsonc(fp):
             txt = open(fp, encoding='utf-8').read()
             no_comments = re.sub(r'//.*?$|/\*.*?\*/', '', txt, flags=re.MULTILINE|re.DOTALL)
@@ -191,7 +192,7 @@ class ModelData:
                 if os.path.isfile(fp):
                     return loader(fp)
             raise FileNotFoundError(f"No {name}.json(c) in {path}")
-        d = ModelData()
+        d = MRModel()
         d.input_data = pd.read_csv(os.path.join(path, 'input_data.csv'))
         d.output_template = pd.read_csv(os.path.join(path, 'output_template.csv'))
         params = load_any('parameters')
@@ -497,4 +498,4 @@ class ModelData:
         json.dump(list(self.nodes_to_fit), open(path + '/nodes_to_fit.json', 'w'), indent=2)
 
 
-load = ModelData.load
+load = MRModel.load

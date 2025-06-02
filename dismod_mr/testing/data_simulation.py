@@ -2,7 +2,7 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 import scipy.integrate
-from dismod_mr.data import ModelData
+from dismod_mr.data import MRModel
 
 
 def simulated_age_intervals(data_type, n, a, pi_age_true, sigma_true):
@@ -77,7 +77,7 @@ def small_output():
 
 
 def simple_model(N):
-    model = ModelData()
+    model = MRModel()
     # overwrite input_data with N empty rows
     model.input_data = pd.DataFrame(index=range(N))
     initialize_input_data(model.input_data)

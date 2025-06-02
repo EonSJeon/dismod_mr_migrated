@@ -1,13 +1,12 @@
 import numpy as np
 import pymc as pm
-import scipy.interpolate
 import dismod_mr
 from dismod_mr.data import ModelVars
 from dismod_mr.model import spline, priors, likelihood, covariates
 
 
 def age_specific_rate(
-    model: dismod_mr.data.ModelData,
+    mr_model: dismod_mr.data.MRModel,
     data_type,
     reference_area='all',
     reference_sex='total',
@@ -27,33 +26,42 @@ def age_specific_rate(
     _data_type = data_type
     result = ModelVars()
 
-    # Ignore NaNs in hierarchical priors
+    # 0) 부모 prior에 NaN 섞였으면 무시
     if isinstance(mu_age_parent, np.ndarray) and np.isnan(mu_age_parent).any() or \
        isinstance(sigma_age_parent, np.ndarray) and np.isnan(sigma_age_parent).any():
         mu_age_parent = None
         sigma_age_parent = None
 
-    ages = np.array(model.parameters['ages'])
-    data = model.get_data(data_type)
-    lb_data = model.get_data(lower_bound) if lower_bound else None
-    parameters = model.parameters.get(data_type, {})
+    ages = np.array(mr_model.parameters['ages'])
+    data = mr_model.get_data(data_type)
+    lb_data = mr_model.get_data(lower_bound) if lower_bound else None
+    parameters = mr_model.parameters.get(data_type, {})
 
     vars = ModelVars()
     vars['data'] = data
 
-    # Spline knots and smoothing
-    knots = np.array(parameters.get('parameter_age_mesh', np.arange(ages[0], ages[-1]+1, 5)))
-    smooth_map = {'No Prior': np.inf, 'Slightly': .5, 'Moderately': .05, 'Very': .005}
-    smoothing = (float(parameters['smoothness']['amount'])
-                 if isinstance(parameters.get('smoothness'), dict)
-                 else smooth_map.get(parameters.get('smoothness'), 0.0))
+    # ── 1) Spline knots & smoothing ──────────────────────────────
+    knots = np.array(
+        parameters.get(
+            'parameter_age_mesh',
+            np.arange(ages[0], ages[-1] + 1, 5)
+        )
+    )
+    smooth_map = {'No Prior': np.inf, 'Slightly': 0.5, 'Moderately': 0.05, 'Very': 0.005}
+    smoothness_param = parameters.get('smoothness')
+    if isinstance(smoothness_param, dict):
+        amt = smoothness_param.get('amount')
+        smoothing = float(amt) if isinstance(amt, (int, float)) else smooth_map.get(amt, 0.0)
+    else:
+        smoothing = smooth_map.get(smoothness_param, 0.0)
 
-    with pm.Model() as model_ctx:
-        # 1) age spline prior or reuse
+    pm_model = pm.Model()
+    with pm_model:
+        # 1-1) spline prior
         if mu_age is None:
             spline_vars = spline.spline(
                 data_type=_data_type,
-                ages=ages,
+                ages=ages,  
                 knots=knots,
                 smoothing=smoothing,
                 interpolation_method=interpolation_method
@@ -63,126 +71,310 @@ def age_specific_rate(
             vars['mu_age'] = mu_age
             vars['ages'] = ages
 
-        # 2) apply level & derivative constraints
-        vars.update(priors.level_constraints(_data_type, parameters, vars['mu_age'], ages))
-        vars.update(priors.derivative_constraints(_data_type, parameters, vars['mu_age'], ages))
+        # 1-2) level & derivative constraints
+        vars.update(priors.level_constraints(
+            data_type=_data_type,
+            parameters=parameters,
+            unconstrained_mu_age=vars['mu_age'],
+            ages=ages
+        ))
+        vars.update(priors.derivative_constraints(
+            data_type=_data_type,
+            parameters=parameters,
+            mu_age=vars['mu_age'],
+            ages=ages
+        ))
 
-        # 3) hierarchical similarity
+        # 1-3) hierarchical similarity (부모 prior이 있을 때만)
         if mu_age_parent is not None:
-            vars.update(priors.similar(_data_type, vars['mu_age'], mu_age_parent, sigma_age_parent, 0.0))
+            vars.update(priors.similar(
+                data_type=_data_type,
+                mu_child=vars['mu_age'],
+                mu_parent=mu_age_parent,
+                sigma_parent=sigma_age_parent,
+                sigma_difference=0.0
+            ))
 
-        # 4) approximate age-interval means
+        # ── 2) age‐interval 평균 계산 ─────────────────────────────────
         if len(data) > 0:
-            # fill missing se/ess
             data = data.copy()
+            # 2-1) standard_error, effective_sample_size 채우기
             se = data['standard_error'].mask(
-                   data['standard_error']<0,
-                   (data['upper_ci']-data['lower_ci'])/(2*1.96)
+                data['standard_error'] < 0,
+                (data['upper_ci'] - data['lower_ci']) / (2 * 1.96)
             )
             ess = data['effective_sample_size'].fillna(
-                   data['value']*(1-data['value'])/se**2
+                data['value'] * (1 - data['value']) / se**2
             )
-            data['standard_error'], data['effective_sample_size'] = se, ess
+            data['standard_error'] = se
+            data['effective_sample_size'] = ess
 
             age_int = dismod_mr.model.age_groups.age_standardize_approx(
-                _data_type,
-                np.ones_like(vars['mu_age'].eval()),
-                vars['mu_age'],
-                data['age_start'], data['age_end'], ages,
-                model=model_ctx
+                name=_data_type,
+                age_weights=np.ones_like(vars['mu_age'].eval()),
+                mu_age=vars['mu_age'],
+                age_start=data['age_start'],
+                age_end=data['age_end'],
+                ages=ages
             )
             vars.update(age_int)
 
-            # 5) covariates & pi
+            # 2-2) covariate & pi
             if include_covariates:
                 cov = covariates.mean_covariate_model(
-                    _data_type, vars['mu_interval'], data,
-                    parameters, model, reference_area,
-                    reference_sex, reference_year, zero_re
+                    data_type=_data_type,
+                    mu=vars['mu_interval'],
+                    input_data=data,
+                    parameters=parameters,
+                    model=mr_model,
+                    root_area=reference_area,
+                    root_sex=reference_sex,
+                    root_year=reference_year,
+                    zero_re=zero_re
                 )
                 vars.update(cov)
             else:
                 vars['pi'] = vars['mu_interval']
-
-            # 6) select likelihood
-            fn_map = {
-                'binom': likelihood.binom,
-                'beta_binom': likelihood.beta_binom,
-                'beta_binom_2': likelihood.beta_binom_2,
-                'poisson': likelihood.poisson,
-                'neg_binom': likelihood.neg_binom,
-                'neg_binom_lower_bound': likelihood.neg_binom_lower_bound,
-                'normal': likelihood.normal,
-                'log_normal': likelihood.log_normal,
-                'offset_log_normal': likelihood.offset_log_normal
-            }
-            like_fn = fn_map.get(rate_type)
-            if like_fn is None:
-                raise ValueError(f'Unsupported rate_type {rate_type}')
-            like = like_fn(
-                _data_type,
-                vars['pi'], vars.get('sigma'),
-                data['value'], data['effective_sample_size']
-            )
-            vars.update(like)
         else:
-            # no data: only covariate model
+            # 데이터가 없으면 covariate 모델만
             if include_covariates:
-                vars.update(covariates.mean_covariate_model(
-                    _data_type, None, data,
-                    parameters, model,
-                    reference_area, reference_sex,
-                    reference_year, zero_re
-                ))
+                cov = covariates.mean_covariate_model(
+                    data_type=_data_type,
+                    mu=None,
+                    input_data=data,
+                    parameters=parameters,
+                    model=mr_model,
+                    root_area=reference_area,
+                    root_sex=reference_sex,
+                    root_year=reference_year,
+                    zero_re=zero_re
+                )
+                vars.update(cov)
 
-        # 7) covariate-level constraints
+        # ── 3) RATE_TYPE별 전처리 + likelihood 호출 ────────────────────
+        if len(data) > 0:
+            if rate_type == 'neg_binom':
+                # (1) 비적합 ESS: <=0 또는 NaN → 0으로 설정
+                bad_ess = (data['effective_sample_size'] <= 0) | data['effective_sample_size'].isna()
+                if bad_ess.any():
+                    print(f"WARNING: {bad_ess.sum()} rows of {_data_type} have non-positive or missing ESS.")
+                    data.loc[bad_ess, 'effective_sample_size'] = 0.0
+
+                # (2) 과도한 ESS: ≥1e10 → 1e10으로 clamp
+                big_ess = data['effective_sample_size'] >= 1e10
+                if big_ess.any():
+                    print(f"WARNING: {big_ess.sum()} rows of {_data_type} ess > 1e10.")
+                    data.loc[big_ess, 'effective_sample_size'] = 1e10
+
+                # (3) heterogeneity → dispersion lower bound
+                hetero = parameters.get('heterogeneity', None)
+                lower = {'Slightly': 9.0, 'Moderately': 3.0, 'Very': 1.0}.get(hetero, 1.0)
+                if data_type == 'pf':
+                    lower = 1e12
+
+                # (4) dispersion covariate prior 생성
+                disp_cov = covariates.dispersion_covariate_model(
+                    data_type=_data_type,
+                    input_data=data,
+                    delta_lb=lower,
+                    delta_ub=lower * 9.0
+                )
+                vars.update(disp_cov)
+                # → disp_cov: {'delta': TensorVariable, 'sigma_alpha': [...], 'alpha': [...], ...}
+
+                # (5) negative‐binomial likelihood 호출
+                nb_dict = likelihood.neg_binom(
+                    name=_data_type,
+                    pi=vars['pi'],
+                    delta=vars['delta'],
+                    p=data['value'].to_numpy(),
+                    n=data['effective_sample_size'].to_numpy().astype(int)
+                )
+                vars.update(nb_dict)
+
+
+            elif rate_type == 'log_normal':
+                # (1) SE가 음수인 행 → 1e6으로 설정
+                missing = data['standard_error'] < 0
+                if missing.any():
+                    print(f"WARNING: {missing.sum()} rows of {_data_type} no SE.")
+                    data.loc[missing, 'standard_error'] = 1e6
+
+                # (2) sigma prior (Uniform)
+                vars['sigma'] = pm.Uniform(
+                    name=f'sigma_{_data_type}',
+                    lower=1e-4,
+                    upper=1.0,
+                    initval=1e-2
+                )
+
+                # (3) log_normal likelihood 호출
+                lg_dict = likelihood.log_normal(
+                    name=_data_type,
+                    pi=vars['pi'],
+                    sigma=vars['sigma'],
+                    p=data['value'].to_numpy(),
+                    s=data['standard_error'].to_numpy()
+                )
+                vars.update(lg_dict)
+
+            elif rate_type == 'normal':
+                # (1) SE가 음수인 행 → 1e6으로 설정
+                missing = data['standard_error'] < 0
+                if missing.any():
+                    print(f"WARNING: {missing.sum()} rows of {_data_type} no SE.")
+                    data.loc[missing, 'standard_error'] = 1e6
+
+                # (2) sigma prior (Uniform)
+                vars['sigma'] = pm.Uniform(
+                    name=f'sigma_{_data_type}',
+                    lower=1e-4,
+                    upper=1e-1,
+                    initval=1e-2
+                )
+
+                # (3) normal likelihood 호출
+                nm_dict = likelihood.normal(
+                    name=_data_type,
+                    pi=vars['pi'],
+                    sigma=vars['sigma'],
+                    p=data['value'].to_numpy(),
+                    s=data['standard_error'].to_numpy()
+                )
+                vars.update(nm_dict)
+
+            elif rate_type == 'binom':
+                # (1) ESS가 음수인 행 → 0으로 설정
+                bad_ess = data['effective_sample_size'] < 0
+                if bad_ess.any():
+                    print(f"WARNING: {bad_ess.sum()} rows of {_data_type} invalid ess.")
+                    data.loc[bad_ess, 'effective_sample_size'] = 0.0
+
+                # (2) binomial likelihood 호출
+                bb_dict = likelihood.binom(
+                    name=_data_type,
+                    pi=vars['pi'],
+                    p=data['value'].to_numpy(),
+                    n=data['effective_sample_size'].to_numpy().astype(int)
+                )
+                vars.update(bb_dict)
+
+            elif rate_type == 'beta_binom':
+                # 이제는 'beta_binom'만 남김
+                bbb_dict = likelihood.beta_binom(
+                    name=_data_type,
+                    pi=vars['pi'],
+                    p=data['value'].to_numpy(),
+                    n=data['effective_sample_size'].to_numpy().astype(int)
+                )
+                vars.update(bbb_dict)
+
+            elif rate_type == 'poisson':
+                # (1) ESS가 음수인 행 → 0으로 설정
+                bad_ess = data['effective_sample_size'] < 0
+                if bad_ess.any():
+                    print(f"WARNING: {bad_ess.sum()} rows of {_data_type} invalid ess.")
+                    data.loc[bad_ess, 'effective_sample_size'] = 0.0
+
+                # (2) poisson likelihood 호출
+                pois_dict = likelihood.poisson(
+                    name=_data_type,
+                    pi=vars['pi'],
+                    p=data['value'].to_numpy(),
+                    n=data['effective_sample_size'].to_numpy().astype(int)
+                )
+                vars.update(pois_dict)
+
+            elif rate_type == 'offset_log_normal':
+                # (1) sigma prior (Uniform)
+                vars['sigma'] = pm.Uniform(
+                    name=f'sigma_{_data_type}',
+                    lower=1e-4,
+                    upper=10.0,
+                    initval=1e-2
+                )
+                # (2) offset_log_normal likelihood 호출
+                oln_dict = likelihood.offset_log_normal(
+                    name=_data_type,
+                    pi=vars['pi'],
+                    sigma=vars['sigma'],
+                    p=data['value'].to_numpy(),
+                    s=data['standard_error'].to_numpy()
+                )
+                vars.update(oln_dict)
+
+            else:
+                raise ValueError(f'Unsupported rate_type "{rate_type}"')
+
+        # ── 4) 데이터가 전혀 없으면 likelihood 호출 없음 ─────────────────
+
+        # ── 5) covariate‐level constraints ─────────────────────────────
         if include_covariates:
-            vars.update(priors.covariate_level_constraints(_data_type, model, vars, ages))
+            vars.update(priors.covariate_level_constraints(
+                data_type=_data_type,
+                model=mr_model,
+                vars=vars,
+                ages=ages
+            ))
 
-        # 8) lower-bound data
+        # ── 6) lower‐bound 데이터 처리 (옵션) ──────────────────────────
         if lb_data is not None and len(lb_data) > 0:
             lb = {}
             lb_interval = dismod_mr.model.age_groups.age_standardize_approx(
-                f'lb_{_data_type}',
-                np.ones_like(vars['mu_age'].eval()),
-                vars['mu_age'],
-                lb_data['age_start'], lb_data['age_end'], ages
+                name=f'lb_{_data_type}',
+                age_weights=np.ones_like(vars['mu_age'].eval()),
+                mu_age=vars['mu_age'],
+                age_start=lb_data['age_start'],
+                age_end=lb_data['age_end'],
+                ages=ages
             )
             lb.update(lb_interval)
             if include_covariates:
                 lb_cov = covariates.mean_covariate_model(
-                    f'lb_{_data_type}', lb_interval['mu_interval'],
-                    lb_data, parameters, model,
-                    reference_area, reference_sex,
-                    reference_year, zero_re
+                    data_type=f'lb_{_data_type}',
+                    mu=lb_interval['mu_interval'],
+                    input_data=lb_data,
+                    parameters=parameters,
+                    model=mr_model,
+                    root_area=reference_area,
+                    root_sex=reference_sex,
+                    root_year=reference_year,
+                    zero_re=zero_re
                 )
                 lb.update(lb_cov)
             else:
                 lb['pi'] = lb_interval['mu_interval']
+
             lb_disp = covariates.dispersion_covariate_model(
-                f'lb_{_data_type}', lb_data, 1e12, 1e13
+                data_type=f'lb_{_data_type}',
+                input_data=lb_data,
+                lower=1e12,
+                upper=1e13
             )
             lb.update(lb_disp)
-            # fill missing se/ess
+
             se_lb = lb_data['standard_error'].mask(
-                       lb_data['standard_error']<=0|
-                       lb_data['standard_error'].isna(),
-                       (lb_data['upper_ci']-lb_data['lower_ci'])/(2*1.96)
+                lb_data['standard_error'].le(0) | lb_data['standard_error'].isna(),
+                (lb_data['upper_ci'] - lb_data['lower_ci']) / (2 * 1.96)
             )
             ess_lb = lb_data['effective_sample_size'].fillna(
-                       lb_data['value']*(1-lb_data['value'])/se_lb**2
+                lb_data['value'] * (1 - lb_data['value']) / se_lb**2
             )
-            lb_data['standard_error'], lb_data['effective_sample_size'] = se_lb, ess_lb
+            lb_data['standard_error'] = se_lb
+            lb_data['effective_sample_size'] = ess_lb
+
             lb_like = likelihood.neg_binom_lower_bound(
-                f'lb_{_data_type}',
-                lb_interval['pi'], lb_interval['delta'],
-                lb_data['value'], lb_data['effective_sample_size']
+                name=f'lb_{_data_type}',
+                pi=lb_interval['pi'],
+                delta=lb_interval['delta'],
+                p=lb_data['value'].to_numpy(),
+                n=lb_data['effective_sample_size'].to_numpy().astype(int)
             )
             lb.update(lb_like)
             vars['lb'] = lb
 
     result[data_type] = vars
-    return result
+    return pm_model, result
 
 def consistent(
     model,

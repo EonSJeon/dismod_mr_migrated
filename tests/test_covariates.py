@@ -8,7 +8,7 @@ import dismod_mr
 def test_covariate_model_sim_no_hierarchy():
     # 1) Simulate normal data
     np.random.seed(42)
-    model_data = dismod_mr.data.ModelData()
+    model_data = dismod_mr.data.MRModel()
     model_data.hierarchy, model_data.output_template = dismod_mr.testing.data_simulation.small_output()
 
     # X ~ Normal(0,1)
@@ -176,7 +176,7 @@ def test_covariate_model_sim_w_hierarchy():
     # -----------------------------------
     # (6) ModelData에 “p_obs”를 넣어 줌
     # -----------------------------------
-    model_data = dismod_mr.data.ModelData()
+    model_data = dismod_mr.data.MRModel()
     model_data.input_data = pd.DataFrame({
         'value':      p_obs,   # 관측된 π (실수)
         'area':       area,
@@ -248,7 +248,7 @@ def test_covariate_model_sim_w_hierarchy():
     assert len(variables['beta']) == 1
 
 def test_fixed_effect_priors():
-    model_data = dismod_mr.data.ModelData()
+    model_data = dismod_mr.data.MRModel()
     model_data.hierarchy, model_data.output_template = (
         dismod_mr.testing.data_simulation.small_output()
     )
@@ -327,7 +327,7 @@ def test_fixed_effect_priors():
     # 이제 디버깅을 위해 필요한 정보는 모두 출력되었습니다.
 
 def test_random_effect_priors():
-    model_data = dismod_mr.data.ModelData()
+    model_data = dismod_mr.data.MRModel()
     hierarchy, output_template = dismod_mr.testing.data_simulation.small_output()
     model_data.hierarchy, model_data.output_template = hierarchy, output_template
 
@@ -431,7 +431,7 @@ def test_random_effect_priors():
 
 def test_covariate_model_dispersion():
     n = 100
-    model_data = dismod_mr.data.ModelData()
+    model_data = dismod_mr.data.MRModel()
     model_data.hierarchy, model_data.output_template = (
         dismod_mr.testing.data_simulation.small_output()
     )
@@ -552,7 +552,7 @@ def test_covariate_model_shift_for_root_consistency():
     a=np.arange(0,100,1)
     pi_age_true=0.0001*(a*(100.-a)+100.)
 
-    d = dismod_mr.data.ModelData()
+    d = dismod_mr.data.MRModel()
     d.input_data = dismod_mr.testing.data_simulation.simulated_age_intervals(
         'p', n, a, pi_age_true, sigma_true
     )
@@ -581,7 +581,7 @@ def test_predict_for():
     a=np.arange(0,100,1)
     pi_age_true=0.0001*(a*(100.-a)+100.)
 
-    d = dismod_mr.data.ModelData()
+    d = dismod_mr.data.MRModel()
     d.input_data = dismod_mr.testing.data_simulation.simulated_age_intervals(
         'p', n, a, pi_age_true, sigma_true
     )
@@ -602,7 +602,7 @@ def test_predict_for():
 
 def test_predict_for_wo_data():
     # predict without fitting data
-    d = dismod_mr.data.ModelData()
+    d = dismod_mr.data.MRModel()
     d.hierarchy, d.output_template = dismod_mr.testing.data_simulation.small_output()
 
     with pm.Model():
@@ -627,7 +627,7 @@ def test_predict_for_wo_effects():
     a=np.arange(0,100,1)
     pi_age_true=0.0001*(a*(100.-a)+100.)
 
-    d = dismod_mr.data.ModelData()
+    d = dismod_mr.data.MRModel()
     d.input_data = dismod_mr.testing.data_simulation.simulated_age_intervals(
         'p', n, a, pi_age_true, sigma_true
     )
@@ -653,7 +653,7 @@ def test_predict_for_w_region_as_reference():
     a=np.arange(0,100,1)
     pi_age_true=0.0001*(a*(100.-a)+100.)
 
-    d = dismod_mr.data.ModelData()
+    d = dismod_mr.data.MRModel()
     d.input_data = dismod_mr.testing.data_simulation.simulated_age_intervals(
         'p', n, a, pi_age_true, sigma_true
     )

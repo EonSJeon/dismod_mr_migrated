@@ -3,7 +3,7 @@ import dismod_mr
 
 
 def test_blank_input_data():
-    d = dismod_mr.data.ModelData()
+    d = dismod_mr.data.MRModel()
 
     for field in ('data_type value area sex age_start age_end year_start year_end '
                   'standard_error effective_sample_size lower_ci upper_ci age_weights').split():
@@ -21,5 +21,5 @@ def test_blank_input_data():
 
 
 def test_set_effect_prior():
-    dm = dismod_mr.data.ModelData()
+    dm = dismod_mr.data.MRModel()
     dm.set_effect_prior('p', 'x_sex', dict(dist='Constant', mu=.1))
