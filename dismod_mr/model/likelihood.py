@@ -316,56 +316,67 @@ def normal(name, pi, sigma, p, s):
 
 
 
+
+
 def log_normal(data_type, pi, sigma, p, s):
     """
     Generate PyMC objects for a lognormal model on log scale with observational error.
-
-    Parameters
-    ----------
-    data_type : str
-    pi    : Tensor or array, expected values of rates (must be >0)
-    sigma : Tensor or array, model dispersion parameter on log scale
-    p     : array, observed values of rates
-    s     : array, observational standard errors
-
-    Returns
-    -------
-    dict with keys:
-      - p_obs: observed Normal RV on log(p)
-      - p_pred: posterior predictive back-transformed to original scale
+    수정된 부분: Normal과 Deterministic 이름 충돌 해결
     """
     assert pm.modelcontext(None) is not None, 'log_normal() must be called within a PyMC model'
+
+    # 1) NumPy array로 변환
     p = np.array(p)
     s = np.array(s)
+
+    # 디버그: 잘못된 인덱스 찾아 출력
+    bad_p_idx = np.where(p <= 0)[0]
+    bad_s_idx = np.where(s < 0)[0]
+    if bad_p_idx.size > 0:
+        print(f"[DEBUG] data_type={data_type}: p 배열에서 0 이하인 값 (총 {bad_p_idx.size}개):")
+        for i in bad_p_idx:
+            print(f"    index={i}, p[{i}]={p[i]}")
+    if bad_s_idx.size > 0:
+        print(f"[DEBUG] data_type={data_type}: s 배열에서 음수인 값 (총 {bad_s_idx.size}개):")
+        for i in bad_s_idx:
+            print(f"    index={i}, s[{i}]={s[i]}")
+
+    # 2) 관측값 유효성 검사
     assert np.all(p > 0), 'observed values must be positive'
     assert np.all(s >= 0), 'standard error must be non-negative'
 
-    # observational variance on log scale: sigma^2 + (s/p)^2
-    var = sigma**2 + (s / p)**2
-    std = np.sqrt(var)
+    # 3) 관측 로그값은 NumPy로 미리 계산
+    log_p_np = np.log(p)
 
-    log_p = pm.math.log(p)
+    # 4) 관측 분산 및 표준편차 (PyTensor)
+    var = sigma**2 + (s / p)**2
+    std = pm.math.sqrt(var)
+
+    # 5) 모델링
     log_pi = pm.math.log(pi + 1e-9)
 
     p_obs = pm.Normal(
         name=f'p_obs_{data_type}',
         mu=log_pi,
         sigma=std,
-        observed=log_p
+        observed=log_p_np
     )
 
+    # 1) 로그 예측치 RV 이름: p_log_pred_...
     log_p_pred = pm.Normal(
-        name=f'p_pred_{data_type}',
+        name=f'p_log_pred_{data_type}',  
         mu=log_pi,
         sigma=std
     )
 
+    # 2) 역변환된 예측치 Deterministic 이름은 p_pred_... 로 다르게 설정
     p_pred = pm.Deterministic(
-        name=f'p_pred_{data_type}',
+        name=f'p_pred_{data_type}',      
         var=pm.math.exp(log_p_pred)
     )
 
     return {'p_obs': p_obs, 'p_pred': p_pred}
+
 
 
 

@@ -201,7 +201,7 @@ def age_specific_rate(
                 )
 
                 lg_dict = likelihood.log_normal(
-                    name=_data_type,
+                    data_type=_data_type,
                     pi=vars['pi'],
                     sigma=vars['sigma'],
                     p=data['value'].to_numpy(),

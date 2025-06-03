@@ -2,7 +2,8 @@ import numpy as np
 import pymc as pm
 import pytensor.tensor as at
 
-
+# TODO: scipy.interpolate.interp1d에 comparable하게 여러 옵션 추가 
+# i.e. quadratic, cubic, etc.
 def build_weight_matrix_linear(knots: np.ndarray, ages: np.ndarray) -> np.ndarray:
     """
     1차 선형 보간(linear interpolation)을 위한 weight 행렬 W를 사전 계산.
