@@ -1,96 +1,85 @@
 import pymc as pm
 import numpy as np
 import networkx as nx
+import dismod_mr
 
 import time
 import pymc as pm
 import arviz as az
 import logging
+from typing import Dict, Any, Tuple
 
 logger = logging.getLogger(__name__)
 
 def asr(
-    model_data,
-    pm_model,
+    mr_model: "dismod_mr.data.MRModel",
+    pm_model: pm.Model,
     data_type: str,
-    draws: int = 2000,
-    tune: int = 1000,
+    draws: int = 1000,
+    tune: int = 500,
     chains: int = 2,
-    cores: int = 1,
+    cores: int = 4,
     target_accept: float = 0.9,
     verbose: bool = False,
-):
+) -> Tuple[Dict[str, Any], pm.backends.arviz.InferenceData]:
     """
-    Fit one age‐specific rate model via PyMC v5.3 (NUTS + MAP 초기화).
+    Fit one age‐specific rate model via PyMC v5.3 (NUTS + MAP initialization).
 
     Parameters
     ----------
-    model_data : object
-        사용자 코드에서 age_specific_rate(...) 등을 통해 생성된 객체. 
-        반드시 `model_data.pm_model` 속성에 PyMC Model이 저장되어 있어야 합니다.
-        또한 `model_data.vars[data_type]` 에는 해당 rate_type의 변수 이름들이 dict 형태로 들어 있어야 합니다.
+    mr_model : MRModel
+        `setup_model`을 거쳐 `mr_model.vars[data_type]`에 PyMC 변수들이 채워져 있어야 합니다.
+        또한, `pm_model` 인자로 넘긴 것은 이미 `with pm.Model(): …` 블록 안에서
+        age-specific rate를 정의한 PyMC Model 객체여야 합니다.
+    pm_model : pm.Model
+        `mr_model.vars[data_type]`에 대응하는 PyMC 모델. 반드시 `with pm.Model(): …` 로 감싸서 넘겨야 함.
     data_type : str
-        'p', 'i', 'r', 'f' 등 age‐specific rate type (e.g. 'p' → prevalence).
-    draws : int, optional
-        최종 posterior 샘플 개수 (default=2000).
-    tune : int, optional
-        적응 단계 샘플 개수 (default=1000).
-    chains : int, optional
-        MCMC 체인 개수 (default=2).
-    cores : int, optional
-        동시에 실행할 CPU 코어 개수 (default=1).
-    target_accept : float, optional
-        NUTS 목표 수락율 (default=0.9).
-    verbose : bool, optional
-        True이면 MAP/샘플링 진행 상황을 출력합니다.
+        'p', 'i', 'r', 'f' 등 age‐specific rate type
+    draws, tune, chains, cores, target_accept, verbose
+        PyMC NUTS 샘플링 옵션
 
     Returns
     -------
     map_estimate : dict
-        `pm.find_MAP()`가 반환한 MAP 추정 파라미터들 (사전 형태).
-    trace : arviz.InferenceData
+        `pm.find_MAP()`가 반환한 MAP point estimate (parameter 이름 → 최적값).
+    idata : arviz.InferenceData
         `pm.sample()` 결과로 얻은 InferenceData 객체.
     """
 
     # --- 1) 입력 확인 ---
-    # model_data.pm_model 에 반드시 pymc.Model() 객체가 있어야 합니다.
-    assert pm_model is not None, "asr is called before pm_model is set"
+    assert pm_model is not None, "asr는 pm_model이 설정된 후 호출되어야 합니다."
 
-    # 딱 한번만 MAP → 샘플링 수행
-    start_time = time.time()
-
-    # 2) 모델 내부에 있는 변수(dict) 확인 (옵션)
-    #    예: vars = model_data.vars[data_type]
-    if not hasattr(model_data, "vars") or data_type not in model_data.vars:
-        raise AssertionError(f"model_data.vars[{data_type!r}] 가 존재하지 않습니다. 먼저 age_specific_rate(...) 등을 호출했는지 확인하세요.")
-
-    vars_dict = model_data.vars[data_type]
+    # mr_model.vars[data_type] 가 반드시 존재해야 함
+    if not hasattr(mr_model, "vars") or data_type not in mr_model.vars:
+        raise AssertionError(
+            f"mr_model.vars[{data_type!r}] 가 없습니다. 먼저 `setup_model(..., rate_type=data_type)` 를 호출하세요."
+        )
+    vars_dict = mr_model.vars[data_type]
 
     if verbose:
-        logger.info(f"[asr] data_type='{data_type}' 에 대해 MAP/샘플링 시작")
+        logger.info(f"[asr] data_type={data_type!r} 에 대해 MAP + NUTS 샘플링 시작")
 
-    # 3) MAP 찾기
+    # --- 2) MAP 초기화 ---
     with pm_model:
         if verbose:
-            logger.info("  ▶ MAP 추정치 계산 중(pm.find_MAP)")
-        # pm.find_MAP()는 param → 최적화된 point dict 형태로 반환
+            logger.info("  ▶ pm.find_MAP() 수행 중...")
         map_estimate = pm.find_MAP()
-
         if verbose:
-            logger.info("    MAP estimate:")
-            for k, v in map_estimate.items():
-                # TensorVariable → numpy 로 변환 가능하면 변환하여 출력
+            logger.info("    MAP 결과:")
+            for name, val in map_estimate.items():
                 try:
-                    val = v.eval()
+                    scalar = val.eval()  # Tensor → numpy
                 except Exception:
-                    val = v
-                logger.info(f"      {k}: {val}")
+                    scalar = val
+                logger.info(f"      {name}: {scalar}")
 
-    # 4) NUTS 샘플링
+    # --- 3) NUTS 샘플링 (posterior) ---
+    #    샘플링 전후 시간을 기록해서 wall_time 계산
+    t_start = time.time()
     with pm_model:
         if verbose:
-            logger.info("  ▶ NUTS 샘플링 시작(pm.sample)")
-        trace = pm.sample(
+            logger.info("  ▶ pm.sample() 수행 중 (NUTS)...")
+        idata = pm.sample(
             draws=draws,
             tune=tune,
             chains=chains,
@@ -98,21 +87,27 @@ def asr(
             start=map_estimate,
             target_accept=target_accept,
             progressbar=verbose,
-            return_inferencedata=True,  # InferenceData 형태로 반환
+            return_inferencedata=True,  # 반드시 InferenceData 형태로 반환
         )
         if verbose:
-            logger.info("  ▶ 샘플링 종료")
+            logger.info("  ▶ 샘플링 완료")
+    t_end = time.time()
+    wall_time = t_end - t_start
 
-    wall_time = time.time() - start_time
     if verbose:
-        logger.info(f"[asr] 전체 소요 시간: {wall_time:.1f} 초")
+        logger.info(f"[asr] 전체 소요 시간: {wall_time:.1f}초")
 
-    # 5) 결과를 model_data에 저장
-    model_data.map_estimate = map_estimate
-    model_data.trace = trace
-    model_data.wall_time = wall_time
+    # --- 4) MRModel에 저장 ---
+    # 4.1) posterior samples
+    mr_model.idata = idata
 
-    return map_estimate, trace
+    # 4.2) MAP point estimate 저장 (dict)
+    mr_model.map_estimate = map_estimate
+
+    # 4.3) wall-time
+    mr_model.wall_time = wall_time
+
+    return map_estimate, idata
 
 def consistent(
     model_data,

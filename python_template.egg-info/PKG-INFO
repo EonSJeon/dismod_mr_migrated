@@ -1,0 +1,12 @@
+Metadata-Version: 2.4
+Name: python-template
+Version: 0.1.0
+Author-email: Your Name <you@example.com>
+Requires-Python: >=3.9
+Requires-Dist: networkx>=3.4.2
+Requires-Dist: numba>=0.61.2
+Requires-Dist: numpy>=2.2.6
+Requires-Dist: pandas>=2.2.3
+Requires-Dist: pymc>=5.22.0
+Requires-Dist: scipy>=1.15.3
+Dynamic: requires-python

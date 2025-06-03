@@ -7,6 +7,8 @@ import networkx as nx
 import json
 import re
 import os
+from typing import Dict, Any
+import pytensor.tensor as at
 
 def my_stats(self, alpha: float = 0.05, start: int = 0, batches: int = 100,
              chain=None, quantiles=(2.5, 25, 50, 75, 97.5)) -> dict:
@@ -29,35 +31,78 @@ def my_stats(self, alpha: float = 0.05, start: int = 0, batches: int = 100,
     }
 
 
-def describe_vars(vars_dict: dict) -> pd.DataFrame:
+def describe_vars(vars_dict: Dict[str, Any]) -> pd.DataFrame:
     """
-    Describe a collection of PyMC random variables: type, current value, and logp if available.
+    Describe a collection of PyMC/Aesara nodes:
+    - Python type
+    - a representative numeric value (if available)
+    - whether a .logp method exists
     """
-    # iterate the provided dict of named nodes
     df = pd.DataFrame(
-        columns=['type', 'value', 'logp'],
+        columns=['type', 'value', 'logp_exists'],
         index=list(vars_dict.keys()),
         dtype=object
     )
+
     for name, node in vars_dict.items():
+        # 1) Record Python type
         df.loc[name, 'type'] = type(node).__name__
-        # show scalar or first element of array
-        if hasattr(node, 'eval'):
-            val = node.eval()
-        elif hasattr(node, 'get_value'):
-            val = node.get_value()
+
+        # 2) Attempt to extract a representative numeric value
+        display_val = None
+
+        # 2a) If this is a pandas DataFrame or Series, report its shape and skip eval
+        if isinstance(node, (pd.DataFrame, pd.Series)):
+            display_val = f"<{type(node).__name__} shape={node.shape}>"
+
+        # 2b) If this is an Aesara TensorVariable, call .eval()
+        elif isinstance(node, at.TensorVariable):
+            try:
+                val = node.eval()
+                if isinstance(val, np.ndarray):
+                    display_val = float(val.flat[0]) if val.size == 1 else f"{val.flat[0]:.3g}, …"
+                else:
+                    display_val = val
+            except Exception:
+                display_val = "<eval failed>"
+
         else:
-            val = getattr(node, 'value', None)
-        if isinstance(val, np.ndarray):
-            if val.size == 1:
-                display_val = float(val)
+            # 2c) If this object has an 'initval' attribute (PyMC RandomVariable), use that
+            if hasattr(node, 'initval'):
+                iv = node.initval
+                if isinstance(iv, np.ndarray):
+                    display_val = float(iv.flat[0]) if iv.size == 1 else f"{iv.flat[0]:.3g}, …"
+                else:
+                    display_val = iv
+
+            # 2d) If this is pm.Data or another object with get_value(), use get_value()
+            elif hasattr(node, 'get_value'):
+                try:
+                    val = node.get_value()
+                    if isinstance(val, np.ndarray):
+                        display_val = float(val.flat[0]) if val.size == 1 else f"{val.flat[0]:.3g}, …"
+                    else:
+                        display_val = val
+                except Exception:
+                    display_val = "<get_value failed>"
+
+            # 2e) Otherwise, if it has a plain 'value' attribute, show that (but ensure scalar)
+            elif hasattr(node, 'value'):
+                val = getattr(node, 'value')
+                if isinstance(val, np.ndarray):
+                    display_val = float(val.flat[0]) if val.size == 1 else f"{val.flat[0]:.3g}, …"
+                else:
+                    display_val = val
+
             else:
-                display_val = f"{val.flat[0]:.3g}, ..."
-        else:
-            display_val = val
+                display_val = "<non-numeric>"
+
         df.loc[name, 'value'] = display_val
-        df.loc[name, 'logp'] = getattr(node, 'logp', np.nan)
-    return df.sort_values(by='logp')
+
+        # 3) Check for presence of a logp method (PyMC 5 uses .logp for distributions)
+        df.loc[name, 'logp_exists'] = hasattr(node, 'logp')
+
+    return df.sort_values(by='type')
 
 
 def check_convergence(vars_dict: dict) -> bool:
