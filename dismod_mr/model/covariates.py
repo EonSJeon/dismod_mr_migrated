@@ -593,9 +593,9 @@ def predict_for(
         leaves = [area]
 
     # 6) output_template에서 (area, sex, year)에 해당하는 pop, covariates 추출
-    output = model.output_template.copy()
+    output_tpl = model.output_template.copy()
     grp = (
-        output
+        output_tpl
         .groupby(["area", "sex", "year"], as_index=False)
         .mean()
         .set_index(["area", "sex", "year"])
