@@ -19,6 +19,8 @@ def age_standardize_approx(
     age_end: np.ndarray,
     ages: np.ndarray,
 ) -> Dict[str, Any]:
+    print(age_weights.shape)
+    print(age_weights)
     """
     Approximate interval average of mu_age over [age_start, age_end] with weights.
     Returns dict with 'mu_interval' deterministic.

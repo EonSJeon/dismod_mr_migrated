@@ -314,7 +314,7 @@ class MRModel:
             parameters=self.parameters[rate_type],
             root_area='all', root_sex='total', root_year='all',
             area=area, sex=sex, year=year,
-            population_weighted=1.0,
+            population_weighted=True,
             vars=self.vars[rate_type],
             lower=self.parameters[rate_type].get('level_bounds',{}).get('lower', 0),
             upper=self.parameters[rate_type].get('level_bounds',{}).get('upper', 1)

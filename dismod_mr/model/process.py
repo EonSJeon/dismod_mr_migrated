@@ -23,6 +23,22 @@ def age_specific_rate(
     """
     Generate PyMC objects for epidemiological age-interval data model.
     """
+    # TODO: 하드코딩 나중에 없애기
+    age_weights = [
+        1.22947, 1.22947, 1.22947, 1.22947, 1.22947, 
+        1.102266, 1.102266, 1.102266, 1.102266, 1.102266, 
+        0.982624, 0.982624, 0.982624, 0.982624, 0.982624, 
+        0.8691720000000001, 0.8691720000000001, 0.8691720000000001, 0.8691720000000001, 0.8691720000000001, 
+        0.736446, 0.736446, 0.736446, 0.736446, 0.736446, 
+        0.597018, 0.597018, 0.597018, 0.597018, 0.597018, 
+        0.453052, 0.453052, 0.453052, 0.453052, 0.453052, 
+        0.319516, 0.319516, 0.319516, 0.319516, 0.319516, 
+        0.21945800000000001, 0.21945800000000001, 0.21945800000000001, 0.21945800000000001, 0.21945800000000001, 
+        0.1209038, 0.1209038, 0.1209038, 0.1209038, 0.1209038, 
+        0.0493326, 0.0493326, 0.0493326, 0.0493326, 0.0493326
+    ]
+    age_weights = np.array(age_weights)
+
     _data_type = data_type
     result = ModelVars()
 
@@ -115,7 +131,7 @@ def age_specific_rate(
 
             age_int = dismod_mr.model.age_groups.age_standardize_approx(
                 name=_data_type,
-                age_weights=np.ones_like(vars['mu_age'].eval()),
+                age_weights=age_weights,
                 mu_age=vars['mu_age'],
                 age_start=data['age_start'],
                 age_end=data['age_end'],
@@ -302,7 +318,7 @@ def age_specific_rate(
             lb = {}
             lb_interval = dismod_mr.model.age_groups.age_standardize_approx(
                 name=f'lb_{_data_type}',
-                age_weights=np.ones_like(vars['mu_age'].eval()),
+                age_weights=age_weights,
                 mu_age=vars['mu_age'],
                 age_start=lb_data['age_start'],
                 age_end=lb_data['age_end'],

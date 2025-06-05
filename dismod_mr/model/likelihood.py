@@ -382,30 +382,21 @@ def log_normal(data_type, pi, sigma, p, s):
 
 def offset_log_normal(name, pi, sigma, p, s):
     """
-    Generate PyMC objects for an offset log-normal model
+    Generate PyMC objects for an offset log-normal model (수정 판)
 
-    Parameters
-    ----------
-    name  : str
-    pi    : Tensor or array, expected baseline values
-    sigma : Tensor or array, model dispersion parameter on log scale
-    p     : array, observed values of rates
-    s     : array, observational standard errors
-
-    Returns
-    -------
-    dict with keys:
-      - p_zeta: Uniform prior for offset
-      - p_obs: observed Normal RV on log(p + zeta)
-      - p_pred: posterior predictive back-transformed minus offset
+    주요 변경점:
+      - pm.Normal.dist(...).logp(log_obs) → pm.logp(pm.Normal.dist(...), log_obs)
     """
+
     assert pm.modelcontext(None) is not None, 'offset_log_normal() must be called within a PyMC model'
+
+    # 1) NumPy array 변환 및 유효성 검사
     p = np.array(p)
     s = np.array(s)
     assert np.all(p >= 0), 'observed values must be non-negative'
     assert np.all(s >= 0), 'standard error must be non-negative'
 
-    # prior on offset to avoid log(0)
+    # 2) offset Prior 정의
     p_zeta = pm.Uniform(
         name=f'p_zeta_{name}',
         lower=1e-9,
@@ -413,37 +404,48 @@ def offset_log_normal(name, pi, sigma, p, s):
         initval=1e-6
     )
 
-    # observational variance on log scale: sigma^2 + (s/(p+zeta))^2
-    # mask infinite s
-    mask = ~np.isinf(s)
-    var = sigma**2 + np.where(mask, (s/(p + p_zeta))**2, 0.0)
-    std = np.sqrt(var)
+    # 3) p + ζ 값 계산 (PyTensor)
+    p_plus_zeta = p_zeta + at.as_tensor(p)  # p는 NumPy, p_zeta는 PyTensor → broadcast
 
-    # observed log-transformed data
-    log_obs = pm.math.log(p + p_zeta)
-    log_pi = pm.math.log(pi + p_zeta)
+    # 4) 분산·표준편차 (PyTensor)
+    var = sigma**2 + (at.as_tensor(s) / p_plus_zeta)**2
+    std = at.sqrt(var)
 
-    p_obs = pm.Normal(
-        name=f'p_obs_{name}',
-        mu=log_pi[mask],
-        sigma=std[mask],
-        observed=log_obs[mask]
+    # 5) 관측치 로그 변환 (PyTensor)
+    log_obs = at.log(p_plus_zeta)
+
+    # 6) 예측치 평균 로그(μ) 계산 (PyTensor)
+    pi_plus_zeta = p_zeta + at.as_tensor(pi)  
+    log_pi = at.log(pi_plus_zeta)
+
+    # 7) Log-likelihood를 Potential로 추가하기
+    #    - pm.Normal.dist(...) 로 분포 객체를 만들고, pm.logp(분포, 값) 형태로 logp 벡터를 얻습니다.
+    rv = pm.Normal.dist(mu=log_pi, sigma=std)
+    logp_vec = pm.logp(rv, log_obs)  # ← 여기서 수정된 부분
+    pm.Potential(
+        name=f'p_obs_likelihood_{name}', 
+        var=at.sum(logp_vec)
     )
 
-    # predictive log-ratio
+    # 8) Posterior Predictive 용 latent RV: log_pred ~ Normal(log_pi, std)
     log_pred = pm.Normal(
         name=f'log_pred_{name}',
         mu=log_pi,
         sigma=std
     )
 
-    # back-transform and remove offset
+    # 9) 원래 스케일로 되돌리고 offset(ζ) 제거
     p_pred = pm.Deterministic(
         name=f'p_pred_{name}',
-        var=(pm.math.exp(log_pred) - p_zeta)
+        var=at.exp(log_pred) - p_zeta
     )
 
-    return {'p_zeta': p_zeta, 'p_obs': p_obs, 'p_pred': p_pred}
+    return {
+        'p_zeta': p_zeta,
+        'p_obs_potential': None,  # 실제 변수로 직접 참조할 일은 없어서 None
+        'p_pred': p_pred
+    }
+
 
 
 
