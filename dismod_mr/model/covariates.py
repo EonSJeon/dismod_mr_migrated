@@ -7,7 +7,7 @@ import pytensor.tensor as at
 import warnings
 import dismod_mr
 
-SEX_VALUE = {'male': .5, 'total': 0., 'female': -.5}
+SEX_VALUE = {'Male': .5, 'Both': 0., 'Female': -.5}
 
 
 
@@ -71,13 +71,13 @@ def build_random_effects_matrix(
         if area not in hierarchy:
             print(f'WARNING: "{area}" not in model hierarchy, skipping')
             continue
-        path = nx.shortest_path(hierarchy, 'all', area)
+        path = nx.shortest_path(hierarchy, 'Global', area)
         for lvl, node in enumerate(path):
             hierarchy.nodes[node]['level'] = lvl
             U.at[idx, node] = 1.0
 
     for node in nodes:
-        path = nx.shortest_path(hierarchy, 'all', node)
+        path = nx.shortest_path(hierarchy, 'Global', node)
         for lvl, nd in enumerate(path):
             hierarchy.nodes[nd]['level'] = lvl
 
@@ -99,7 +99,7 @@ def build_random_effects_matrix(
     valid = [c for c in U.columns if 1 <= U[c].sum() < n or c in keep_consts]
     U = U[valid].copy()
 
-    path_to_root = nx.shortest_path(hierarchy, 'all', root_area)
+    path_to_root = nx.shortest_path(hierarchy, 'Global', root_area)
     U_shift = pd.Series(
         {c: (1.0 if c in path_to_root else 0.0)
          for c in U.columns},
@@ -327,7 +327,7 @@ def mean_covariate_model(data_type: str,
     leaves = [n for n in nx.bfs_tree(model.hierarchy, root_area)
               if model.hierarchy.out_degree(n) == 0] or [root_area]
     # 참조 조건에 따라 leaf_cov 선택
-    if root_sex == 'total' and root_year == 'all':
+    if root_sex == 'Both' and root_year == 'all':
         cov_tmp = covs.reset_index().drop(['sex', 'year'], axis=1)
         leaf_cov = cov_tmp.groupby('area').mean().loc[leaves]
     else:

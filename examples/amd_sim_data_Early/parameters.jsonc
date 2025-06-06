@@ -267,8 +267,8 @@
   "p": {
     // Age interval during which p is increasing
     "increasing": {
-      "age_start": 2,   // start of increase
-      "age_end":   94   // end of increase
+      "age_start": 0,   // start of increase
+      "age_end":   100   // end of increase
     },
 
     // Age interval during which p is decreasing
@@ -299,7 +299,7 @@
 
     // Mesh points used for parameter interpolation
     "parameter_age_mesh": [
-      2, 30, 45, 60, 80, 94
+      0, 30, 45, 60, 80, 100
     ],
 
     // Degree of heterogeneity in the model

@@ -103,7 +103,7 @@ def level_constraints(
 
 def covariate_level_constraints(
     data_type: str,
-    model: any,
+    model: dismod_mr.data.MRModel,
     vars: dict[str, any],
     ages: np.ndarray
 ) -> dict:
@@ -134,7 +134,7 @@ def covariate_level_constraints(
     U         = vars['U']  # pandas.DataFrame
     hierarchy = model.hierarchy
     layers: list[np.ndarray] = []
-    nodes = ['all']
+    nodes = ['Global']
     for _ in range(3):
         nodes = [c for n in nodes for c in hierarchy.successors(n)]
         mask = np.array([col in nodes for col in U.columns], dtype=bool)

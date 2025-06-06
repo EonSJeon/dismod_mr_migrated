@@ -139,7 +139,9 @@ class ModelVars(dict):
     - describe() to print a summary
     - empirical_priors_from_fit() to extract constant priors from fitted vars
     """
-    def __iadd__(self, other: dict):
+    def __iadd__(self, other):
+       
+        # 원래 동작: 다른 dict를 update 하는 부분
         self.update(other)
         return self
 
@@ -182,6 +184,7 @@ class ModelVars(dict):
                 prior_dict[t] = pdt
         return prior_dict
 
+
 class MRModel:
     """
     Holds input data, parameters, hierarchy, and model variables.
@@ -207,21 +210,21 @@ class MRModel:
         return self.input_data
 
     def keep(self,
-             areas: list = ['all'],
-             sexes: list = ['male','female','total'],
+             areas: list = ['Global'],
+             sexes: list = ['Male','Female','Both'],
              start_year: int = -np.inf,
              end_year: int = np.inf):
-        if 'all' not in areas:
-            self.hierarchy.remove_node('all')
+        if 'Global' not in areas:
+            self.hierarchy.remove_node('Global')
             for area in areas:
-                self.hierarchy.add_edge('all', area)
-            self.hierarchy = nx.bfs_tree(self.hierarchy, 'all')
-            relevant = self.input_data['area'].isin(self.hierarchy.nodes()) | (self.input_data['area']=='all')
+                self.hierarchy.add_edge('Global', area)
+            self.hierarchy = nx.bfs_tree(self.hierarchy, 'Global')
+            relevant = self.input_data['area'].isin(self.hierarchy.nodes()) | (self.input_data['area']=='Global')
             self.input_data = self.input_data.loc[relevant]
             self.nodes_to_fit = list(set(self.hierarchy.nodes()) & set(self.nodes_to_fit))
         self.input_data = self.input_data[self.input_data['sex'].isin(sexes)]
-        self.input_data = self.input_data[self.input_data['year_end'] >= start_year]
-        self.input_data = self.input_data[self.input_data['year_start'] <= end_year]
+        # self.input_data = self.input_data[self.input_data['year_end'] >= start_year]
+        # self.input_data = self.input_data[self.input_data['year_start'] <= end_year]
         print(f'kept {len(self.input_data)} rows of data')
 
     @staticmethod
