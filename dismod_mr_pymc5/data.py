@@ -4,7 +4,6 @@ import json
 import os
 import re
 import numpy as np
-import dismod_mr_pymc5
 
 class MRModel:
     """
@@ -84,8 +83,8 @@ class MRModel:
         self.input_data = self.input_data[self.input_data['sex'].isin(sexes)]
 
         # Filter by year
-        self.input_data = self.input_data[self.input_data['year_end'] >= start_year]
-        self.input_data = self.input_data[self.input_data['year_start'] <= end_year]
+        self.input_data = self.input_data[self.input_data['year_id'] >= start_year]
+        self.input_data = self.input_data[self.input_data['year_id'] <= end_year]
 
         print(f'kept {len(self.input_data)} rows of data')
 
