@@ -5,6 +5,7 @@ import os
 import re
 import numpy as np
 
+
 class MRModel:
     """
     MRModel is a container and manager for all data, parameters, and structures needed to build and fit a hierarchical Bayesian disease model using PyMC.
