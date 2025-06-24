@@ -5,7 +5,6 @@ import os
 import re
 import numpy as np
 
-
 class MRModel:
     """
     MRModel is a container and manager for all data, parameters, and structures needed to build and fit a hierarchical Bayesian disease model using PyMC.
@@ -86,7 +85,7 @@ class MRModel:
         # Filter by year
         self.input_data = self.input_data[self.input_data['year_id'] >= start_year]
         self.input_data = self.input_data[self.input_data['year_id'] <= end_year]
-
+        
         print(f'kept {len(self.input_data)} rows of data')
 
 
