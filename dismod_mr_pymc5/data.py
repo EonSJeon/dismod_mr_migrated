@@ -4,6 +4,8 @@ import json
 import os
 import re
 import numpy as np
+import pymc as pm
+from . import model
 
 class MRModel:
     """
@@ -143,5 +145,55 @@ class MRModel:
         for n in nx.dfs_preorder_nodes(G, 'Global'):
             if G.nodes[n]['cnt'] > 0:
                 print('  '*G.nodes[n]['depth'] + n, G.nodes[n]['cnt'])
+
+
+    def setup_model(self, data_type=None, rate_type='neg_binom',
+        interpolation_method='linear', include_covariates=True):
+        """ Setup PyMC model vars based on current parameters and data
+        :Parameters:
+        - `data_type` : str, optional if data_type is provided, the
+        model will be an age standardized rate model for the
+        specified data_type.  otherwise, it will be a consistent
+        model for all data types.
+        - `rate_type` : str, optional, one of 'beta_binom',
+        'beta_binom_2', 'binom', 'log_normal', 'neg_binom',
+        'neg_binom_lower_bound', 'neg_binom', 'normal',
+        'offest_log_normal', or 'poisson' if rate_type is
+        provided, this option specifies the rate model for data of
+        this rate type.
+    
+        - `interpolation_method` : str, optional, one of 'linear',
+        'nearest', 'zero', 'slinear', 'quadratic, or 'cubic'
+    
+        - `include_covariates` : bool, optional if rate_type is
+        provided, this option specifies if the model for the rate
+        type should include additional fixed and random effects
+    
+        :Notes:
+        This method also creates methods fit and predict_for for the
+        current object
+        """
+    
+        with pm.Model() as self.model:
+            if data_type:
+                self.vars = model.asr(self, 
+                                      data_type, 
+                                      rate_type=rate_type, 
+                                      interpolation_method=interpolation_method,
+                                      include_covariates=include_covariates)
+            
+                self.model_settings['rate_type'] = rate_type
+        
+            else:
+                self.vars = model.consistent(self, rate_type=rate_type)
+                self.model_settings['consistent'] = True
+
+
+    # Unlimplemented Function Declarations
+    # def save
+    # def predict_for
+    # def fit
+    # def invalid_precision
+    # def plot
 
 load = MRModel.load
