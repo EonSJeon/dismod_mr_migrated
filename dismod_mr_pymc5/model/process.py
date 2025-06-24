@@ -1,7 +1,8 @@
 import numpy as np
 import pymc as pm
 import dismod_mr_pymc5
-from dismod_mr_pymc5.model import spline, priors, likelihood, covariates, age_groups
+import dismod_mr
+from dismod_mr.model import spline, priors, likelihood, covariates, age_groups
 
 
 def get_default_age_weights():
@@ -124,7 +125,7 @@ def age_specific_rate(
 
     # ------------------ Start of PyMC model ------------------
     # with pm.Model(coords=coords) as model:
-    with pm.Model as model:
+    with pm.Model() as model:
 
         # 2) spline prior (spline.py)
         if mu_age is None:
