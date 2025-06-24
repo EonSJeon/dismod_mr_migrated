@@ -520,149 +520,178 @@ def dispersion_covariate_model(
 
 def predict_for(
     model: dismod_mr.data.MRModel,
-    parameters: Dict[str, Any],
-    root_area: str,
-    root_sex: str,
-    root_year: int,
-    area: str,
-    sex: str,
-    year: int,
-    population_weighted: bool,
     vars: Dict[str, Any],
-    lower: float,
-    upper: float
+    lower: float = -np.inf,
+    upper: float = np.inf
 ) -> np.ndarray:
     """
-    Generate posterior-predictive draws for a specific (area, sex, year).
-
-    model.idata에 posterior 샘플이 저장되어 있어야 하고,
-    vars 딕셔너리에 mu_age, alpha, beta, U, X, ... 등이 포함되어 있어야 합니다.
+    Simplified posterior-predictive draws using only mu_age.
     """
-
-    # 1) InferenceData 객체 가져오기
-    assert hasattr(model, "idata"), (
-        "`model.idata` not found. 먼저 pm.sample()를 실행하여 posterior를 model.idata에 저장하세요."
-    )
+    # Ensure that sampling has been run
+    assert hasattr(model, "idata"), "`model.idata` not found. Run pm.sample() first."
     idata = model.idata
 
-    # 2) mu_age posterior 추출
-    assert "mu_age" in vars, "`vars` dict에 'mu_age'가 없습니다."
-    mu_var = vars["mu_age"]
+    # Extract mu_age variable
+    mu_var = vars.get("mu_age")
+    assert mu_var is not None, "`vars` must contain key 'mu_age'!"
     mu_name = mu_var.name
-    assert mu_name in idata.posterior, f"`{mu_name}` not found in idata.posterior"
-    arr = idata.posterior[mu_name].values  # shape = (n_chain, n_draw, n_ages)
+    assert mu_name in idata.posterior.data_vars, f"`{mu_name}` not found in idata.posterior"
+
+    # Pull out and reshape the posterior draws
+    arr = idata.posterior[mu_name].values  # (chains, draws, ages)
     n_chain, n_draw, n_ages = arr.shape
-    mu_trace = arr.reshape((n_chain * n_draw, n_ages))  # shape = (n_samples, n_ages)
-    n_samples = mu_trace.shape[0]
+    mu_trace = arr.reshape((n_chain * n_draw, n_ages))  # → (samples, ages)
 
-    # 3) alpha_trace (random effects) 생성
-    alpha_trace = np.empty((n_samples, 0))
-    if "alpha" in vars and isinstance(vars["alpha"], list) and vars["alpha"]:
-        traces = []
-        for alpha_node, sigma_const in zip(vars["alpha"], vars["const_alpha_sigma"]):
-            name_alpha = alpha_node.name
-            if name_alpha in idata.posterior:
-                arr_a = idata.posterior[name_alpha].values  # (chains, draws)
-                traces.append(arr_a.reshape(n_chain * n_draw))
-            else:
-                sig = max(sigma_const, 1e-9)
-                loc = float(alpha_node)
-                draws = np.random.normal(loc=loc, scale=1.0 / np.sqrt(sig), size=n_samples)
-                traces.append(draws)
-        alpha_trace = np.column_stack(traces)
+    # Clip to [lower, upper] and return
+    return np.clip(mu_trace, lower, upper)
 
-    # 4) beta_trace (fixed effects) 생성
-    beta_trace = np.empty((n_samples, 0))
-    if "beta" in vars and isinstance(vars["beta"], list) and vars["beta"]:
-        traces = []
-        for beta_node, sigma_const in zip(vars["beta"], vars["const_beta_sigma"]):
-            name_beta = beta_node.name
-            if name_beta in idata.posterior:
-                arr_b = idata.posterior[name_beta].values  # (chains, draws)
-                traces.append(arr_b.reshape(n_chain * n_draw))
-            else:
-                sig = max(sigma_const, 1e-9)
-                loc = float(beta_node)
-                draws = np.random.normal(loc=loc, scale=1.0 / np.sqrt(sig), size=n_samples)
-                traces.append(draws)
-        beta_trace = np.column_stack(traces)
 
-    # 5) leaf-nodes 찾기
-    leaves = [n for n in nx.bfs_tree(model.hierarchy, area) if model.hierarchy.out_degree(n) == 0]
-    if not leaves:
-        leaves = [area]
 
-    # 6) output_template에서 (area, sex, year)에 해당하는 pop, covariates 추출
-    output_tpl = model.output_template.copy()
-    grp = (
-        output_tpl
-        .groupby(["area", "sex", "year"], as_index=False)
-        .mean()
-        .set_index(["area", "sex", "year"])
-    )
+# def predict_for(
+#     model: dismod_mr.data.MRModel,
+#     parameters: Dict[str, Any],
+#     root_area: str,
+#     root_sex: str,
+#     root_year: int,
+#     area: str,
+#     sex: str,
+#     year: int,
+#     population_weighted: bool,
+#     vars: Dict[str, Any],
+#     lower: float,
+#     upper: float
+# ) -> np.ndarray:
+#     """
+#     Generate posterior-predictive draws for a specific (area, sex, year).
 
-    # 7) X_df (centered covariates) 준비
-    if "X" in vars and isinstance(vars["X"], pd.DataFrame) and not vars["X"].empty:
-        # (1) 원래 vars["X"].columns에 들어있는 이름들로 grp에서 필터
-        X_df = grp.filter(vars["X"].columns, axis=1).copy()
+#     model.idata에 posterior 샘플이 저장되어 있어야 하고,
+#     vars 딕셔너리에 mu_age, alpha, beta, U, X, ... 등이 포함되어 있어야 합니다.
+#     """
 
-        # (2) "x_sex"가 vars["X"].columns에 있으면 강제로 생성
-        if "x_sex" in vars["X"].columns:
-            X_df["x_sex"] = SEX_VALUE[sex]
+#     # 1) InferenceData 객체 가져오기
+#     assert hasattr(model, "idata"), (
+#         "`model.idata` not found. 먼저 pm.sample()를 실행하여 posterior를 model.idata에 저장하세요."
+#     )
+#     idata = model.idata
 
-        # (3) shift(centering) 적용
-        X_df = X_df - vars["X_shift"]
+#     # 2) mu_age posterior 추출
+#     assert "mu_age" in vars, "`vars` dict에 'mu_age'가 없습니다."
+#     mu_var = vars["mu_age"]
+#     mu_name = mu_var.name
+#     assert mu_name in idata.posterior, f"`{mu_name}` not found in idata.posterior"
+#     arr = idata.posterior[mu_name].values  # shape = (n_chain, n_draw, n_ages)
+#     n_chain, n_draw, n_ages = arr.shape
+#     mu_trace = arr.reshape((n_chain * n_draw, n_ages))  # shape = (n_samples, n_ages)
+#     n_samples = mu_trace.shape[0]
 
-    else:
-        X_df = pd.DataFrame(index=grp.index)
+#     # 3) alpha_trace (random effects) 생성
+#     alpha_trace = np.empty((n_samples, 0))
+#     if "alpha" in vars and isinstance(vars["alpha"], list) and vars["alpha"]:
+#         traces = []
+#         for alpha_node, sigma_const in zip(vars["alpha"], vars["const_alpha_sigma"]):
+#             name_alpha = alpha_node.name
+#             if name_alpha in idata.posterior:
+#                 arr_a = idata.posterior[name_alpha].values  # (chains, draws)
+#                 traces.append(arr_a.reshape(n_chain * n_draw))
+#             else:
+#                 sig = max(sigma_const, 1e-9)
+#                 loc = float(alpha_node)
+#                 draws = np.random.normal(loc=loc, scale=1.0 / np.sqrt(sig), size=n_samples)
+#                 traces.append(draws)
+#         alpha_trace = np.column_stack(traces)
 
-    # 8) U_row Series 준비 (한 행짜리)
-    if "U" in vars and isinstance(vars["U"], pd.DataFrame) and not vars["U"].empty:
-        U_cols = vars["U"].columns
-        U_row = pd.Series(0.0, index=U_cols)
-    else:
-        U_row = pd.Series(dtype=float)
+#     # 4) beta_trace (fixed effects) 생성
+#     beta_trace = np.empty((n_samples, 0))
+#     if "beta" in vars and isinstance(vars["beta"], list) and vars["beta"]:
+#         traces = []
+#         for beta_node, sigma_const in zip(vars["beta"], vars["const_beta_sigma"]):
+#             name_beta = beta_node.name
+#             if name_beta in idata.posterior:
+#                 arr_b = idata.posterior[name_beta].values  # (chains, draws)
+#                 traces.append(arr_b.reshape(n_chain * n_draw))
+#             else:
+#                 sig = max(sigma_const, 1e-9)
+#                 loc = float(beta_node)
+#                 draws = np.random.normal(loc=loc, scale=1.0 / np.sqrt(sig), size=n_samples)
+#                 traces.append(draws)
+#         beta_trace = np.column_stack(traces)
 
-    # 9) 각 leaf별로 cov_shift 계산
-    cov_shift = np.zeros(n_samples)
-    total_weight = 0.0
+#     # 5) leaf-nodes 찾기
+#     leaves = [n for n in nx.bfs_tree(model.hierarchy, area) if model.hierarchy.out_degree(n) == 0]
+#     if not leaves:
+#         leaves = [area]
 
-    for leaf in leaves:
-        # (1) U_row 재설정
-        U_row[:] = 0.0
-        path = nx.shortest_path(model.hierarchy, root_area, leaf)
-        for node in path[1:]:
-            if node in U_row.index:
-                U_row[node] = 1.0 - vars["U_shift"].get(node, 0.0)
+#     # 6) output_template에서 (area, sex, year)에 해당하는 pop, covariates 추출
+#     output_tpl = model.output_template.copy()
+#     grp = (
+#         output_tpl
+#         .groupby(["area", "sex", "year"], as_index=False)
+#         .mean()
+#         .set_index(["area", "sex", "year"])
+#     )
 
-        # (2) random-effect 기여: alpha_trace · U_row
-        if alpha_trace.size > 0:
-            log_shift = alpha_trace.dot(U_row.values)
-        else:
-            log_shift = np.zeros(n_samples)
+#     # 7) X_df (centered covariates) 준비
+#     if "X" in vars and isinstance(vars["X"], pd.DataFrame) and not vars["X"].empty:
+#         # (1) 원래 vars["X"].columns에 들어있는 이름들로 grp에서 필터
+#         X_df = grp.filter(vars["X"].columns, axis=1).copy()
 
-        # (3) fixed-effect 기여: beta_trace · X_vals
-        if beta_trace.size and (leaf, sex, year) in X_df.index:
-            x_vals = X_df.loc[(leaf, sex, year)].values
-            log_shift = log_shift + beta_trace.dot(x_vals)
+#         # (2) "x_sex"가 vars["X"].columns에 있으면 강제로 생성
+#         if "x_sex" in vars["X"].columns:
+#             X_df["x_sex"] = SEX_VALUE[sex]
 
-        # (4) population‐weight or unweighted average
-        pop = float(grp.at[(leaf, sex, year), "pop"])
-        if population_weighted:
-            cov_shift += np.exp(log_shift) * pop
-            total_weight += pop
-        else:
-            cov_shift += log_shift
-            total_weight += 1.0
+#         # (3) shift(centering) 적용
+#         X_df = X_df - vars["X_shift"]
 
-    # (5) 정규화
-    if population_weighted:
-        cov_shift = cov_shift / total_weight
-    else:
-        cov_shift = np.exp(cov_shift / total_weight)
+#     else:
+#         X_df = pd.DataFrame(index=grp.index)
 
-    # 10) baseline mu_age와 곱하고 clip
-    preds = mu_trace * cov_shift[:, None]  # shape = (n_samples, n_ages)
-    clipped = np.clip(preds, lower, upper)
+#     # 8) U_row Series 준비 (한 행짜리)
+#     if "U" in vars and isinstance(vars["U"], pd.DataFrame) and not vars["U"].empty:
+#         U_cols = vars["U"].columns
+#         U_row = pd.Series(0.0, index=U_cols)
+#     else:
+#         U_row = pd.Series(dtype=float)
 
-    return clipped
+#     # 9) 각 leaf별로 cov_shift 계산
+#     cov_shift = np.zeros(n_samples)
+#     total_weight = 0.0
+
+#     for leaf in leaves:
+#         # (1) U_row 재설정
+#         U_row[:] = 0.0
+#         path = nx.shortest_path(model.hierarchy, root_area, leaf)
+#         for node in path[1:]:
+#             if node in U_row.index:
+#                 U_row[node] = 1.0 - vars["U_shift"].get(node, 0.0)
+
+#         # (2) random-effect 기여: alpha_trace · U_row
+#         if alpha_trace.size > 0:
+#             log_shift = alpha_trace.dot(U_row.values)
+#         else:
+#             log_shift = np.zeros(n_samples)
+
+#         # (3) fixed-effect 기여: beta_trace · X_vals
+#         if beta_trace.size and (leaf, sex, year) in X_df.index:
+#             x_vals = X_df.loc[(leaf, sex, year)].values
+#             log_shift = log_shift + beta_trace.dot(x_vals)
+
+#         # (4) population‐weight or unweighted average
+#         pop = float(grp.at[(leaf, sex, year), "pop"])
+#         if population_weighted:
+#             cov_shift += np.exp(log_shift) * pop
+#             total_weight += pop
+#         else:
+#             cov_shift += log_shift
+#             total_weight += 1.0
+
+#     # (5) 정규화
+#     if population_weighted:
+#         cov_shift = cov_shift / total_weight
+#     else:
+#         cov_shift = np.exp(cov_shift / total_weight)
+
+#     # 10) baseline mu_age와 곱하고 clip
+#     preds = mu_trace * cov_shift[:, None]  # shape = (n_samples, n_ages)
+#     clipped = np.clip(preds, lower, upper)
+
+#     return clipped

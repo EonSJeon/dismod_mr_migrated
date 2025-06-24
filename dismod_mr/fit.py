@@ -19,95 +19,94 @@ def asr(
     tune: int = 500,
     chains: int = 2,
     cores: int = 4,
-    target_accept: float = 0.9,
+    target_accept: float = 0.9995,
+    max_treedepth: int = 10,
+    use_advi: bool = False,         # ← ADVI 모드 on/off
+    use_metropolis: bool = False,   # ← Metropolis 모드 on/off
+    vi_iters: int = 20000,
+    vi_lr: float = 1e-3,
     verbose: bool = False,
 ) -> Tuple[Dict[str, Any], pm.backends.arviz.InferenceData]:
     """
-    Fit one age‐specific rate model via PyMC v5.3 (NUTS + MAP initialization).
+    Fit one age‐specific rate model via PyMC v5.3 (ADVI, Metropolis, or NUTS).
 
-    Parameters
-    ----------
-    mr_model : MRModel
-        `setup_model`을 거쳐 `mr_model.vars[data_type]`에 PyMC 변수들이 채워져 있어야 합니다.
-        또한, `pm_model` 인자로 넘긴 것은 이미 `with pm.Model(): …` 블록 안에서
-        age-specific rate를 정의한 PyMC Model 객체여야 합니다.
-    pm_model : pm.Model
-        `mr_model.vars[data_type]`에 대응하는 PyMC 모델. 반드시 `with pm.Model(): …` 로 감싸서 넘겨야 함.
-    data_type : str
-        'p', 'i', 'r', 'f' 등 age‐specific rate type
-    draws, tune, chains, cores, target_accept, verbose
-        PyMC NUTS 샘플링 옵션
-
-    Returns
-    -------
-    map_estimate : dict
-        `pm.find_MAP()`가 반환한 MAP point estimate (parameter 이름 → 최적값).
-    idata : arviz.InferenceData
-        `pm.sample()` 결과로 얻은 InferenceData 객체.
+    - use_advi=True  → pm.fit() → approx.sample()
+    - use_metropolis=True → pm.Metropolis() via pm.sample(step=...)
+    - else → default NUTS with target_accept & max_treedepth
     """
-
-    # --- 1) 입력 확인 ---
+    # 1) 입력 확인
     assert pm_model is not None, "asr는 pm_model이 설정된 후 호출되어야 합니다."
-
-    # mr_model.vars[data_type] 가 반드시 존재해야 함
     if not hasattr(mr_model, "vars") or data_type not in mr_model.vars:
         raise AssertionError(
-            f"mr_model.vars[{data_type!r}] 가 없습니다. 먼저 `setup_model(..., rate_type=data_type)` 를 호출하세요."
+            f"mr_model.vars[{data_type!r}] 가 없습니다. 먼저 `setup_model(..., rate_type=data_type)` 호출하세요."
         )
     vars_dict = mr_model.vars[data_type]
 
-    if verbose:
-        logger.info(f"[asr] data_type={data_type!r} 에 대해 MAP + NUTS 샘플링 시작")
-
-    # --- 2) MAP 초기화 ---
+    # 2) MAP 초기화
     with pm_model:
         if verbose:
             logger.info("  ▶ pm.find_MAP() 수행 중...")
         map_estimate = pm.find_MAP()
-        if verbose:
-            logger.info("    MAP 결과:")
-            for name, val in map_estimate.items():
-                try:
-                    scalar = val.eval()  # Tensor → numpy
-                except Exception:
-                    scalar = val
-                logger.info(f"      {name}: {scalar}")
 
-    # --- 3) NUTS 샘플링 (posterior) ---
-    #    샘플링 전후 시간을 기록해서 wall_time 계산
+    # 3) Posterior approximation / sampling
     t_start = time.time()
     with pm_model:
-        if verbose:
-            logger.info("  ▶ pm.sample() 수행 중 (NUTS)...")
-        idata = pm.sample(
-            draws=draws,
-            tune=tune,
-            chains=chains,
-            cores=cores,
-            start=map_estimate,
-            target_accept=target_accept,
-            progressbar=verbose,
-            return_inferencedata=True,  # 반드시 InferenceData 형태로 반환
-        )
-        if verbose:
-            logger.info("  ▶ 샘플링 완료")
+        if use_advi:
+            if verbose:
+                logger.info("  ▶ ADVI 수행 중...")
+            approx = pm.fit(
+                n=vi_iters,
+                method="advi",
+                obj_optimizer=pm.adam(learning_rate=vi_lr),
+                callbacks=[pm.callbacks.CheckParametersConvergence(tolerance=1e-4)],
+            )
+            idata = approx.sample(draws=draws)
+
+        elif use_metropolis:
+            if verbose:
+                logger.info("  ▶ Metropolis 샘플링 수행 중...")
+            step = pm.Metropolis()
+            idata = pm.sample(
+                draws=draws,
+                tune=tune,
+                chains=chains,
+                cores=cores,
+                step=step,
+                start=map_estimate,
+                return_inferencedata=True,
+                progressbar=verbose,
+            )
+
+        else:
+            if verbose:
+                logger.info("  ▶ NUTS 샘플링 수행 중...")
+            idata = pm.sample(
+                draws=draws,
+                tune=tune,
+                chains=chains,
+                cores=cores,
+                start=map_estimate,
+                target_accept=target_accept,
+                nuts={"max_treedepth": max_treedepth},
+                return_inferencedata=True,
+                progressbar=verbose,
+            )
     t_end = time.time()
     wall_time = t_end - t_start
-
     if verbose:
         logger.info(f"[asr] 전체 소요 시간: {wall_time:.1f}초")
 
-    # --- 4) MRModel에 저장 ---
-    # 4.1) posterior samples
+    # 4) MRModel에 저장
     mr_model.idata = idata
-
-    # 4.2) MAP point estimate 저장 (dict)
     mr_model.map_estimate = map_estimate
-
-    # 4.3) wall-time
     mr_model.wall_time = wall_time
 
-    return map_estimate, idata
+    # 5) 반환
+    if use_advi:
+        return map_estimate, idata, approx
+    else:
+        return map_estimate, idata
+
 
 def consistent(
     model_data,
