@@ -1,0 +1,289 @@
+[sigma_alpha_p_1, sigma_alpha_p_2, sigma_alpha_p_3, sigma_alpha_p_1, sigma_alpha_p_2, sigma_alpha_p_3, sigma_alpha_p_2, sigma_alpha_p_3, sigma_alpha_p_3, sigma_alpha_p_3, sigma_alpha_p_2, sigma_alpha_p_3, sigma_alpha_p_2, sigma_alpha_p_3, sigma_alpha_p_3, sigma_alpha_p_3, sigma_alpha_p_3, sigma_alpha_p_3, sigma_alpha_p_3, sigma_alpha_p_1, sigma_alpha_p_2, sigma_alpha_p_1, sigma_alpha_p_2, sigma_alpha_p_2, sigma_alpha_p_1, sigma_alpha_p_2, sigma_alpha_p_3, sigma_alpha_p_3, sigma_alpha_p_2, sigma_alpha_p_3]
+pm_model:
+<pymc.model.Model object at 0x13676c400>
+
+result_dict:
+dict_keys(['data', 'gamma', 'mu_age', 'ages', 'knots', 'unconstrained_mu_age', 'mu_sim', 'mu_age_derivative_potential', 'mu_interval', 'pi', 'U', 'U_shift', 'sigma_alpha', 'alpha', 'alpha_potentials', 'const_alpha_sigma', 'X', 'X_shift', 'beta', 'const_beta_sigma', 'hierarchy', 'eta', 'Z', 'zeta', 'delta', 'p_obs', 'p_pred', 'covariate_constraint'])
+
+=== RANDOM VARIABLES IN PM_MODEL (PyMC 5) ===
+
+1. All variables in the model:
+  Model doesn't have .vars attribute
+
+2. Variables by type:
+   Free random variables (unobserved):
+     - gamma_p_0: TensorVariable
+     - gamma_p_1: TensorVariable
+     - gamma_p_2: TensorVariable
+     - gamma_p_3: TensorVariable
+     - gamma_p_4: TensorVariable
+     - gamma_p_5: TensorVariable
+     - sigma_alpha_p_0_z: TensorVariable
+     - sigma_alpha_p_1_z: TensorVariable
+     - sigma_alpha_p_2_z: TensorVariable
+     - sigma_alpha_p_3_z: TensorVariable
+     - sigma_alpha_p_4_z: TensorVariable
+     - alpha_p_Central Europe, Eastern Europe, and Central Asia: TensorVariable
+     - alpha_p_Eastern Europe: TensorVariable
+     - alpha_p_Russian Federation: TensorVariable
+     - alpha_p_High-income: TensorVariable
+     - alpha_p_Australasia: TensorVariable
+     - alpha_p_Australia: TensorVariable
+     - alpha_p_High-income Asia Pacific: TensorVariable
+     - alpha_p_Japan: TensorVariable
+     - alpha_p_Republic of Korea: TensorVariable
+     - alpha_p_Singapore: TensorVariable
+     - alpha_p_High-income North America: TensorVariable
+     - alpha_p_United States of America: TensorVariable
+     - alpha_p_Western Europe: TensorVariable
+     - alpha_p_Germany: TensorVariable
+     - alpha_p_Iceland: TensorVariable
+     - alpha_p_Ireland: TensorVariable
+     - alpha_p_Italy: TensorVariable
+     - alpha_p_Netherlands: TensorVariable
+     - alpha_p_Spain: TensorVariable
+     - alpha_p_North Africa and Middle East: TensorVariable
+     - alpha_p_Iran (Islamic Republic of): TensorVariable
+     - alpha_p_South Asia: TensorVariable
+     - alpha_p_India: TensorVariable
+     - alpha_p_Nepal: TensorVariable
+     - alpha_p_Southeast Asia, East Asia, and Oceania: TensorVariable
+     - alpha_p_East Asia: TensorVariable
+     - alpha_p_China: TensorVariable
+     - alpha_p_Taiwan (Province of China): TensorVariable
+     - alpha_p_Southeast Asia: TensorVariable
+     - alpha_p_Thailand: TensorVariable
+     - beta_p_x_sdi: TensorVariable
+     - beta_p_x_tob: TensorVariable
+     - beta_p_x_sex: TensorVariable
+     - eta_p: TensorVariable
+
+   Observed random variables:
+
+   Deterministic variables:
+     - mu_age_p: TensorVariable
+     - value_constrained_mu_age_p: TensorVariable
+     - cum_sum_mu_p: TensorVariable
+     - mu_interval_p: TensorVariable
+     - sigma_alpha_p_0: TensorVariable
+     - sigma_alpha_p_1: TensorVariable
+     - sigma_alpha_p_2: TensorVariable
+     - sigma_alpha_p_3: TensorVariable
+     - sigma_alpha_p_4: TensorVariable
+     - pi_p: TensorVariable
+     - delta_p: TensorVariable
+     - p_pred_p: TensorVariable
+
+
+3. Variables as dictionary:
+  - gamma_p_0: TensorVariable
+  - gamma_p_1: TensorVariable
+  - gamma_p_2: TensorVariable
+  - gamma_p_3: TensorVariable
+  - gamma_p_4: TensorVariable
+  - gamma_p_5: TensorVariable
+  - mu_age_p: TensorVariable
+  - smooth_p: TensorVariable
+  - value_constrained_mu_age_p: TensorVariable
+  - parent_similarity_p: TensorVariable
+  - mu_age_derivative_potential_p: TensorVariable
+  - cum_sum_mu_p: TensorVariable
+  - mu_interval_p: TensorVariable
+  - sigma_alpha_p_0_z: TensorVariable
+  - sigma_alpha_p_0: TensorVariable
+  - sigma_alpha_p_0_trunc: TensorVariable
+  - sigma_alpha_p_1_z: TensorVariable
+  - sigma_alpha_p_1: TensorVariable
+  - sigma_alpha_p_1_trunc: TensorVariable
+  - sigma_alpha_p_2_z: TensorVariable
+  - sigma_alpha_p_2: TensorVariable
+  - sigma_alpha_p_2_trunc: TensorVariable
+  - sigma_alpha_p_3_z: TensorVariable
+  - sigma_alpha_p_3: TensorVariable
+  - sigma_alpha_p_3_trunc: TensorVariable
+  - sigma_alpha_p_4_z: TensorVariable
+  - sigma_alpha_p_4: TensorVariable
+  - sigma_alpha_p_4_trunc: TensorVariable
+  - alpha_p_Central Europe, Eastern Europe, and Central Asia: TensorVariable
+  - alpha_p_Eastern Europe: TensorVariable
+  - alpha_p_Russian Federation: TensorVariable
+  - alpha_p_High-income: TensorVariable
+  - alpha_p_Australasia: TensorVariable
+  - alpha_p_Australia: TensorVariable
+  - alpha_p_High-income Asia Pacific: TensorVariable
+  - alpha_p_Japan: TensorVariable
+  - alpha_p_Republic of Korea: TensorVariable
+  - alpha_p_Singapore: TensorVariable
+  - alpha_p_High-income North America: TensorVariable
+  - alpha_p_United States of America: TensorVariable
+  - alpha_p_Western Europe: TensorVariable
+  - alpha_p_Germany: TensorVariable
+  - alpha_p_Iceland: TensorVariable
+  - alpha_p_Ireland: TensorVariable
+  - alpha_p_Italy: TensorVariable
+  - alpha_p_Netherlands: TensorVariable
+  - alpha_p_Spain: TensorVariable
+  - alpha_p_North Africa and Middle East: TensorVariable
+  - alpha_p_Iran (Islamic Republic of): TensorVariable
+  - alpha_p_South Asia: TensorVariable
+  - alpha_p_India: TensorVariable
+  - alpha_p_Nepal: TensorVariable
+  - alpha_p_Southeast Asia, East Asia, and Oceania: TensorVariable
+  - alpha_p_East Asia: TensorVariable
+  - alpha_p_China: TensorVariable
+  - alpha_p_Taiwan (Province of China): TensorVariable
+  - alpha_p_Southeast Asia: TensorVariable
+  - alpha_p_Thailand: TensorVariable
+  - beta_p_x_sdi: TensorVariable
+  - beta_p_x_tob: TensorVariable
+  - beta_p_x_sex: TensorVariable
+  - pi_p: TensorVariable
+  - eta_p: TensorVariable
+  - delta_p: TensorVariable
+  - p_obs_p: TensorVariable
+  - p_pred_p: TensorVariable
+  - covariate_constraint_p: TensorVariable
+
+4. Model graph structure:
+   Number of free random variables: 45
+   Number of observed random variables: 0
+   Number of deterministic variables: 12
+   Total variables: unknown
+
+5. Alternative inspection methods:
+   All variables from model.graph:
+   Model doesn't have .graph.vars attribute
+
+6. Available model attributes:
+   - RV_dims
+   - add_coord
+   - add_coords
+   - add_named_variable
+   - alpha_p_Australasia
+   - alpha_p_Australia
+   - alpha_p_Central Europe, Eastern Europe, and Central Asia
+   - alpha_p_China
+   - alpha_p_East Asia
+   - alpha_p_Eastern Europe
+   - alpha_p_Germany
+   - alpha_p_High-income
+   - alpha_p_High-income Asia Pacific
+   - alpha_p_High-income North America
+   - alpha_p_Iceland
+   - alpha_p_India
+   - alpha_p_Iran (Islamic Republic of)
+   - alpha_p_Ireland
+   - alpha_p_Italy
+   - alpha_p_Japan
+   - alpha_p_Nepal
+   - alpha_p_Netherlands
+   - alpha_p_North Africa and Middle East
+   - alpha_p_Republic of Korea
+   - alpha_p_Russian Federation
+   - alpha_p_Singapore
+   - alpha_p_South Asia
+   - alpha_p_Southeast Asia
+   - alpha_p_Southeast Asia, East Asia, and Oceania
+   - alpha_p_Spain
+   - alpha_p_Taiwan (Province of China)
+   - alpha_p_Thailand
+   - alpha_p_United States of America
+   - alpha_p_Western Europe
+   - basic_RVs
+   - beta_p_x_sdi
+   - beta_p_x_sex
+   - beta_p_x_tob
+   - check_bounds
+   - check_start_vals
+   - compile_d2logp
+   - compile_dlogp
+   - compile_fn
+   - compile_logp
+   - cont_vars
+   - contexts
+   - continuous_value_vars
+   - coords
+   - covariate_constraint_p
+   - create_value_var
+   - cum_sum_mu_p
+   - d2logp
+   - datalogp
+   - debug
+   - delta_p
+   - deterministics
+   - dim_lengths
+   - disc_vars
+   - discrete_value_vars
+   - dlogp
+   - eta_p
+   - eval_rv_shapes
+   - free_RVs
+   - gamma_p_0
+   - gamma_p_1
+   - gamma_p_2
+   - gamma_p_3
+   - gamma_p_4
+   - gamma_p_5
+   - initial_point
+   - initial_values
+   - isroot
+   - logp
+   - logp_dlogp_function
+   - make_obs_var
+   - model
+   - mu_age_derivative_potential_p
+   - mu_age_p
+   - mu_interval_p
+   - name
+   - name_for
+   - name_of
+   - named_vars
+   - named_vars_to_dims
+   - observed_RVs
+   - observedlogp
+   - p_obs_p
+   - p_pred_p
+   - parent
+   - parent_similarity_p
+   - pi_p
+   - point_logps
+   - potentiallogp
+   - potentials
+   - prefix
+   - profile
+   - register_rv
+   - replace_rvs_by_values
+   - root
+   - rvs_to_initial_values
+   - rvs_to_transforms
+   - rvs_to_values
+   - set_data
+   - set_dim
+   - set_initval
+   - shape_from_dims
+   - sigma_alpha_p_0
+   - sigma_alpha_p_0_trunc
+   - sigma_alpha_p_0_z
+   - sigma_alpha_p_1
+   - sigma_alpha_p_1_trunc
+   - sigma_alpha_p_1_z
+   - sigma_alpha_p_2
+   - sigma_alpha_p_2_trunc
+   - sigma_alpha_p_2_z
+   - sigma_alpha_p_3
+   - sigma_alpha_p_3_trunc
+   - sigma_alpha_p_3_z
+   - sigma_alpha_p_4
+   - sigma_alpha_p_4_trunc
+   - sigma_alpha_p_4_z
+   - smooth_p
+   - str_repr
+   - unobserved_RVs
+   - unobserved_value_vars
+   - update_start_vals
+   - value_constrained_mu_age_p
+   - value_vars
+   - values_to_rvs
+   - varlogp
+   - varlogp_nojac
+
