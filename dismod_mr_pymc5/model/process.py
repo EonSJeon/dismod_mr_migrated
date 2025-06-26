@@ -1,8 +1,7 @@
 import numpy as np
 import pymc as pm
 import dismod_mr_pymc5
-import dismod_mr
-from dismod_mr.model import spline, priors, likelihood, covariates, age_groups
+from dismod_mr_pymc5.model import spline, priors, likelihood, covariates, age_groups
 
 
 def get_default_age_weights():
@@ -32,7 +31,7 @@ def get_default_age_weights():
 
 
 def age_specific_rate(
-    mr_model: dismod_mr.data.MRModel,
+    mr_model: object, # to prevent circular import
     data_type,
     reference_area='Global',
     reference_sex='Both',

@@ -5,7 +5,6 @@ import networkx as nx
 from typing import Dict, List, Tuple, Any
 import pytensor.tensor as at
 import warnings
-import dismod_mr
 
 SEX_VALUE = {'Male': .5, 'Both': 0., 'Female': -.5}
 
@@ -519,7 +518,7 @@ def dispersion_covariate_model(
 
 
 def predict_for(
-    model: dismod_mr.data.MRModel,
+    model: object, # to prevent circular import
     parameters: Dict[str, Any],
     root_area: str,
     root_sex: str,
