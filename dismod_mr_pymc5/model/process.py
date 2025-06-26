@@ -305,7 +305,9 @@ def age_specific_rate(
                     initval=1e-2
                 )
 
-                lg_dict = likelihood.log_normal(
+                print("data['value'].to_numpy()")
+                print(data['value'].to_numpy())
+                lg_dict = likelihood.log_normal( # error occurs here.
                     data_type=_data_type,
                     pi=var_dict['pi'],
                     sigma=var_dict['sigma'],
