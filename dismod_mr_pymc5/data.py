@@ -124,13 +124,13 @@ class MRModel:
         for parent_name, child_name in hier['edges']:
             if parent_name != child_name:  # Skip self-loops
                 valid_edges.append((parent_name, child_name))
-            else:
-                print(f"Warning: Skipping self-loop edge: {parent_name} -> {child_name}")
+            # else:
+            #     print(f"Warning: Skipping self-loop edge: {parent_name} -> {child_name}")
         
         d.hierarchy.add_edges_from(valid_edges)
         d.nodes_to_fit = load_any('nodes_to_fit')
         
-        print(f"Loaded hierarchy with {len(d.hierarchy.nodes())} nodes and {len(valid_edges)} edges")
+        # print(f"Loaded hierarchy with {len(d.hierarchy.nodes())} nodes and {len(valid_edges)} edges")
         return d
     
 

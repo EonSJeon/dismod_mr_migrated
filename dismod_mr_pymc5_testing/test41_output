@@ -1,6 +1,6 @@
 [sigma_alpha_p_1, sigma_alpha_p_2, sigma_alpha_p_3, sigma_alpha_p_1, sigma_alpha_p_2, sigma_alpha_p_3, sigma_alpha_p_2, sigma_alpha_p_3, sigma_alpha_p_3, sigma_alpha_p_3, sigma_alpha_p_2, sigma_alpha_p_3, sigma_alpha_p_2, sigma_alpha_p_3, sigma_alpha_p_3, sigma_alpha_p_3, sigma_alpha_p_3, sigma_alpha_p_3, sigma_alpha_p_3, sigma_alpha_p_1, sigma_alpha_p_2, sigma_alpha_p_1, sigma_alpha_p_2, sigma_alpha_p_2, sigma_alpha_p_1, sigma_alpha_p_2, sigma_alpha_p_3, sigma_alpha_p_3, sigma_alpha_p_2, sigma_alpha_p_3]
 pm_model:
-<pymc.model.Model object at 0x1358a9760>
+<pymc.model.core.Model object at 0x10caaf620>
 
 result_dict:
 dict_keys(['data', 'gamma', 'mu_age', 'ages', 'knots', 'unconstrained_mu_age', 'mu_sim', 'mu_age_derivative_potential', 'mu_interval', 'pi', 'U', 'U_shift', 'sigma_alpha', 'alpha', 'alpha_potentials', 'const_alpha_sigma', 'X', 'X_shift', 'beta', 'const_beta_sigma', 'hierarchy', 'eta', 'Z', 'zeta', 'delta', 'p_obs', 'p_pred', 'covariate_constraint'])
@@ -155,7 +155,6 @@ dict_keys(['data', 'gamma', 'mu_age', 'ages', 'knots', 'unconstrained_mu_age', '
    Model doesn't have .graph.vars attribute
 
 6. Available model attributes:
-   - RV_dims
    - add_coord
    - add_coords
    - add_named_variable
@@ -199,20 +198,19 @@ dict_keys(['data', 'gamma', 'mu_age', 'ages', 'knots', 'unconstrained_mu_age', '
    - compile_dlogp
    - compile_fn
    - compile_logp
-   - cont_vars
-   - contexts
    - continuous_value_vars
    - coords
+   - copy
    - covariate_constraint_p
    - create_value_var
    - cum_sum_mu_p
    - d2logp
+   - data_vars
    - datalogp
    - debug
    - delta_p
    - deterministics
    - dim_lengths
-   - disc_vars
    - discrete_value_vars
    - dlogp
    - eta_p
@@ -224,13 +222,12 @@ dict_keys(['data', 'gamma', 'mu_age', 'ages', 'knots', 'unconstrained_mu_age', '
    - gamma_p_3
    - gamma_p_4
    - gamma_p_5
+   - get_context
    - initial_point
-   - initial_values
    - isroot
    - logp
    - logp_dlogp_function
    - make_obs_var
-   - model
    - mu_age_derivative_potential_p
    - mu_age_p
    - mu_interval_p
@@ -251,6 +248,7 @@ dict_keys(['data', 'gamma', 'mu_age', 'ages', 'knots', 'unconstrained_mu_age', '
    - potentials
    - prefix
    - profile
+   - register_data_var
    - register_rv
    - replace_rvs_by_values
    - root
@@ -278,6 +276,7 @@ dict_keys(['data', 'gamma', 'mu_age', 'ages', 'knots', 'unconstrained_mu_age', '
    - sigma_alpha_p_4_z
    - smooth_p
    - str_repr
+   - to_graphviz
    - unobserved_RVs
    - unobserved_value_vars
    - update_start_vals
