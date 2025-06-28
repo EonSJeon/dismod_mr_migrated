@@ -1,0 +1,2798 @@
+{
+  "nodes": [
+    [
+      "Global",
+      {
+        "location_id": 1,
+        "level": 0,
+        "parent_id": 1
+      }
+    ],
+    [
+      "Central Europe, Eastern Europe, and Central Asia",
+      {
+        "location_id": 31,
+        "level": 1,
+        "parent_id": 1
+      }
+    ],
+    [
+      "Central Asia",
+      {
+        "location_id": 32,
+        "level": 2,
+        "parent_id": 31
+      }
+    ],
+    [
+      "Armenia",
+      {
+        "location_id": 33,
+        "level": 3,
+        "parent_id": 32
+      }
+    ],
+    [
+      "Azerbaijan",
+      {
+        "location_id": 34,
+        "level": 3,
+        "parent_id": 32
+      }
+    ],
+    [
+      "Georgia",
+      {
+        "location_id": 35,
+        "level": 3,
+        "parent_id": 32
+      }
+    ],
+    [
+      "Kazakhstan",
+      {
+        "location_id": 36,
+        "level": 3,
+        "parent_id": 32
+      }
+    ],
+    [
+      "Kyrgyzstan",
+      {
+        "location_id": 37,
+        "level": 3,
+        "parent_id": 32
+      }
+    ],
+    [
+      "Mongolia",
+      {
+        "location_id": 38,
+        "level": 3,
+        "parent_id": 32
+      }
+    ],
+    [
+      "Tajikistan",
+      {
+        "location_id": 39,
+        "level": 3,
+        "parent_id": 32
+      }
+    ],
+    [
+      "Turkmenistan",
+      {
+        "location_id": 40,
+        "level": 3,
+        "parent_id": 32
+      }
+    ],
+    [
+      "Uzbekistan",
+      {
+        "location_id": 41,
+        "level": 3,
+        "parent_id": 32
+      }
+    ],
+    [
+      "Central Europe",
+      {
+        "location_id": 42,
+        "level": 2,
+        "parent_id": 31
+      }
+    ],
+    [
+      "Albania",
+      {
+        "location_id": 43,
+        "level": 3,
+        "parent_id": 42
+      }
+    ],
+    [
+      "Bosnia and Herzegovina",
+      {
+        "location_id": 44,
+        "level": 3,
+        "parent_id": 42
+      }
+    ],
+    [
+      "Bulgaria",
+      {
+        "location_id": 45,
+        "level": 3,
+        "parent_id": 42
+      }
+    ],
+    [
+      "Croatia",
+      {
+        "location_id": 46,
+        "level": 3,
+        "parent_id": 42
+      }
+    ],
+    [
+      "Czechia",
+      {
+        "location_id": 47,
+        "level": 3,
+        "parent_id": 42
+      }
+    ],
+    [
+      "Hungary",
+      {
+        "location_id": 48,
+        "level": 3,
+        "parent_id": 42
+      }
+    ],
+    [
+      "Montenegro",
+      {
+        "location_id": 50,
+        "level": 3,
+        "parent_id": 42
+      }
+    ],
+    [
+      "North Macedonia",
+      {
+        "location_id": 49,
+        "level": 3,
+        "parent_id": 42
+      }
+    ],
+    [
+      "Poland",
+      {
+        "location_id": 51,
+        "level": 3,
+        "parent_id": 42
+      }
+    ],
+    [
+      "Romania",
+      {
+        "location_id": 52,
+        "level": 3,
+        "parent_id": 42
+      }
+    ],
+    [
+      "Serbia",
+      {
+        "location_id": 53,
+        "level": 3,
+        "parent_id": 42
+      }
+    ],
+    [
+      "Slovakia",
+      {
+        "location_id": 54,
+        "level": 3,
+        "parent_id": 42
+      }
+    ],
+    [
+      "Slovenia",
+      {
+        "location_id": 55,
+        "level": 3,
+        "parent_id": 42
+      }
+    ],
+    [
+      "Eastern Europe",
+      {
+        "location_id": 56,
+        "level": 2,
+        "parent_id": 31
+      }
+    ],
+    [
+      "Belarus",
+      {
+        "location_id": 57,
+        "level": 3,
+        "parent_id": 56
+      }
+    ],
+    [
+      "Estonia",
+      {
+        "location_id": 58,
+        "level": 3,
+        "parent_id": 56
+      }
+    ],
+    [
+      "Latvia",
+      {
+        "location_id": 59,
+        "level": 3,
+        "parent_id": 56
+      }
+    ],
+    [
+      "Lithuania",
+      {
+        "location_id": 60,
+        "level": 3,
+        "parent_id": 56
+      }
+    ],
+    [
+      "Republic of Moldova",
+      {
+        "location_id": 61,
+        "level": 3,
+        "parent_id": 56
+      }
+    ],
+    [
+      "Russian Federation",
+      {
+        "location_id": 62,
+        "level": 3,
+        "parent_id": 56
+      }
+    ],
+    [
+      "Ukraine",
+      {
+        "location_id": 63,
+        "level": 3,
+        "parent_id": 56
+      }
+    ],
+    [
+      "High-income",
+      {
+        "location_id": 64,
+        "level": 1,
+        "parent_id": 1
+      }
+    ],
+    [
+      "Australasia",
+      {
+        "location_id": 70,
+        "level": 2,
+        "parent_id": 64
+      }
+    ],
+    [
+      "Australia",
+      {
+        "location_id": 71,
+        "level": 3,
+        "parent_id": 70
+      }
+    ],
+    [
+      "New Zealand",
+      {
+        "location_id": 72,
+        "level": 3,
+        "parent_id": 70
+      }
+    ],
+    [
+      "High-income Asia Pacific",
+      {
+        "location_id": 65,
+        "level": 2,
+        "parent_id": 64
+      }
+    ],
+    [
+      "Brunei Darussalam",
+      {
+        "location_id": 66,
+        "level": 3,
+        "parent_id": 65
+      }
+    ],
+    [
+      "Japan",
+      {
+        "location_id": 67,
+        "level": 3,
+        "parent_id": 65
+      }
+    ],
+    [
+      "Republic of Korea",
+      {
+        "location_id": 68,
+        "level": 3,
+        "parent_id": 65
+      }
+    ],
+    [
+      "Singapore",
+      {
+        "location_id": 69,
+        "level": 3,
+        "parent_id": 65
+      }
+    ],
+    [
+      "High-income North America",
+      {
+        "location_id": 100,
+        "level": 2,
+        "parent_id": 64
+      }
+    ],
+    [
+      "Canada",
+      {
+        "location_id": 101,
+        "level": 3,
+        "parent_id": 100
+      }
+    ],
+    [
+      "Greenland",
+      {
+        "location_id": 349,
+        "level": 3,
+        "parent_id": 100
+      }
+    ],
+    [
+      "United States of America",
+      {
+        "location_id": 102,
+        "level": 3,
+        "parent_id": 100
+      }
+    ],
+    [
+      "Southern Latin America",
+      {
+        "location_id": 96,
+        "level": 2,
+        "parent_id": 64
+      }
+    ],
+    [
+      "Argentina",
+      {
+        "location_id": 97,
+        "level": 3,
+        "parent_id": 96
+      }
+    ],
+    [
+      "Chile",
+      {
+        "location_id": 98,
+        "level": 3,
+        "parent_id": 96
+      }
+    ],
+    [
+      "Uruguay",
+      {
+        "location_id": 99,
+        "level": 3,
+        "parent_id": 96
+      }
+    ],
+    [
+      "Western Europe",
+      {
+        "location_id": 73,
+        "level": 2,
+        "parent_id": 64
+      }
+    ],
+    [
+      "Andorra",
+      {
+        "location_id": 74,
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "Austria",
+      {
+        "location_id": 75,
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "Belgium",
+      {
+        "location_id": 76,
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "Cyprus",
+      {
+        "location_id": 77,
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "Denmark",
+      {
+        "location_id": 78,
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "Finland",
+      {
+        "location_id": 79,
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "France",
+      {
+        "location_id": 80,
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "Germany",
+      {
+        "location_id": 81,
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "Greece",
+      {
+        "location_id": 82,
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "Iceland",
+      {
+        "location_id": 83,
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "Ireland",
+      {
+        "location_id": 84,
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "Israel",
+      {
+        "location_id": 85,
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "Italy",
+      {
+        "location_id": 86,
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "Luxembourg",
+      {
+        "location_id": 87,
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "Malta",
+      {
+        "location_id": 88,
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "Monaco",
+      {
+        "location_id": 367,
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "Netherlands",
+      {
+        "location_id": 89,
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "Norway",
+      {
+        "location_id": 90,
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "Portugal",
+      {
+        "location_id": 91,
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "San Marino",
+      {
+        "location_id": 396,
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "Spain",
+      {
+        "location_id": 92,
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "Sweden",
+      {
+        "location_id": 93,
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "Switzerland",
+      {
+        "location_id": 94,
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "United Kingdom",
+      {
+        "location_id": 95,
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "Latin America and Caribbean",
+      {
+        "location_id": 103,
+        "level": 1,
+        "parent_id": 1
+      }
+    ],
+    [
+      "Andean Latin America",
+      {
+        "location_id": 120,
+        "level": 2,
+        "parent_id": 103
+      }
+    ],
+    [
+      "Bolivia (Plurinational State of)",
+      {
+        "location_id": 121,
+        "level": 3,
+        "parent_id": 120
+      }
+    ],
+    [
+      "Ecuador",
+      {
+        "location_id": 122,
+        "level": 3,
+        "parent_id": 120
+      }
+    ],
+    [
+      "Peru",
+      {
+        "location_id": 123,
+        "level": 3,
+        "parent_id": 120
+      }
+    ],
+    [
+      "Caribbean",
+      {
+        "location_id": 104,
+        "level": 2,
+        "parent_id": 103
+      }
+    ],
+    [
+      "Antigua and Barbuda",
+      {
+        "location_id": 105,
+        "level": 3,
+        "parent_id": 104
+      }
+    ],
+    [
+      "Bahamas",
+      {
+        "location_id": 106,
+        "level": 3,
+        "parent_id": 104
+      }
+    ],
+    [
+      "Barbados",
+      {
+        "location_id": 107,
+        "level": 3,
+        "parent_id": 104
+      }
+    ],
+    [
+      "Belize",
+      {
+        "location_id": 108,
+        "level": 3,
+        "parent_id": 104
+      }
+    ],
+    [
+      "Bermuda",
+      {
+        "location_id": 305,
+        "level": 3,
+        "parent_id": 104
+      }
+    ],
+    [
+      "Cuba",
+      {
+        "location_id": 109,
+        "level": 3,
+        "parent_id": 104
+      }
+    ],
+    [
+      "Dominica",
+      {
+        "location_id": 110,
+        "level": 3,
+        "parent_id": 104
+      }
+    ],
+    [
+      "Dominican Republic",
+      {
+        "location_id": 111,
+        "level": 3,
+        "parent_id": 104
+      }
+    ],
+    [
+      "Grenada",
+      {
+        "location_id": 112,
+        "level": 3,
+        "parent_id": 104
+      }
+    ],
+    [
+      "Guyana",
+      {
+        "location_id": 113,
+        "level": 3,
+        "parent_id": 104
+      }
+    ],
+    [
+      "Haiti",
+      {
+        "location_id": 114,
+        "level": 3,
+        "parent_id": 104
+      }
+    ],
+    [
+      "Jamaica",
+      {
+        "location_id": 115,
+        "level": 3,
+        "parent_id": 104
+      }
+    ],
+    [
+      "Puerto Rico",
+      {
+        "location_id": 385,
+        "level": 3,
+        "parent_id": 104
+      }
+    ],
+    [
+      "Saint Kitts and Nevis",
+      {
+        "location_id": 393,
+        "level": 3,
+        "parent_id": 104
+      }
+    ],
+    [
+      "Saint Lucia",
+      {
+        "location_id": 116,
+        "level": 3,
+        "parent_id": 104
+      }
+    ],
+    [
+      "Saint Vincent and the Grenadines",
+      {
+        "location_id": 117,
+        "level": 3,
+        "parent_id": 104
+      }
+    ],
+    [
+      "Suriname",
+      {
+        "location_id": 118,
+        "level": 3,
+        "parent_id": 104
+      }
+    ],
+    [
+      "Trinidad and Tobago",
+      {
+        "location_id": 119,
+        "level": 3,
+        "parent_id": 104
+      }
+    ],
+    [
+      "United States Virgin Islands",
+      {
+        "location_id": 422,
+        "level": 3,
+        "parent_id": 104
+      }
+    ],
+    [
+      "Central Latin America",
+      {
+        "location_id": 124,
+        "level": 2,
+        "parent_id": 103
+      }
+    ],
+    [
+      "Colombia",
+      {
+        "location_id": 125,
+        "level": 3,
+        "parent_id": 124
+      }
+    ],
+    [
+      "Costa Rica",
+      {
+        "location_id": 126,
+        "level": 3,
+        "parent_id": 124
+      }
+    ],
+    [
+      "El Salvador",
+      {
+        "location_id": 127,
+        "level": 3,
+        "parent_id": 124
+      }
+    ],
+    [
+      "Guatemala",
+      {
+        "location_id": 128,
+        "level": 3,
+        "parent_id": 124
+      }
+    ],
+    [
+      "Honduras",
+      {
+        "location_id": 129,
+        "level": 3,
+        "parent_id": 124
+      }
+    ],
+    [
+      "Mexico",
+      {
+        "location_id": 130,
+        "level": 3,
+        "parent_id": 124
+      }
+    ],
+    [
+      "Nicaragua",
+      {
+        "location_id": 131,
+        "level": 3,
+        "parent_id": 124
+      }
+    ],
+    [
+      "Panama",
+      {
+        "location_id": 132,
+        "level": 3,
+        "parent_id": 124
+      }
+    ],
+    [
+      "Venezuela (Bolivarian Republic of)",
+      {
+        "location_id": 133,
+        "level": 3,
+        "parent_id": 124
+      }
+    ],
+    [
+      "Tropical Latin America",
+      {
+        "location_id": 134,
+        "level": 2,
+        "parent_id": 103
+      }
+    ],
+    [
+      "Brazil",
+      {
+        "location_id": 135,
+        "level": 3,
+        "parent_id": 134
+      }
+    ],
+    [
+      "Paraguay",
+      {
+        "location_id": 136,
+        "level": 3,
+        "parent_id": 134
+      }
+    ],
+    [
+      "North Africa and Middle East",
+      {
+        "location_id": 137,
+        "level": 1,
+        "parent_id": 1
+      }
+    ],
+    [
+      "North Africa and Middle East",
+      {
+        "location_id": 138,
+        "level": 2,
+        "parent_id": 137
+      }
+    ],
+    [
+      "Afghanistan",
+      {
+        "location_id": 160,
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "Algeria",
+      {
+        "location_id": 139,
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "Bahrain",
+      {
+        "location_id": 140,
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "Egypt",
+      {
+        "location_id": 141,
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "Iran (Islamic Republic of)",
+      {
+        "location_id": 142,
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "Iraq",
+      {
+        "location_id": 143,
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "Jordan",
+      {
+        "location_id": 144,
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "Kuwait",
+      {
+        "location_id": 145,
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "Lebanon",
+      {
+        "location_id": 146,
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "Libya",
+      {
+        "location_id": 147,
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "Morocco",
+      {
+        "location_id": 148,
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "Oman",
+      {
+        "location_id": 150,
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "Palestine",
+      {
+        "location_id": 149,
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "Qatar",
+      {
+        "location_id": 151,
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "Saudi Arabia",
+      {
+        "location_id": 152,
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "Sudan",
+      {
+        "location_id": 522,
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "Syrian Arab Republic",
+      {
+        "location_id": 153,
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "Tunisia",
+      {
+        "location_id": 154,
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "Türkiye",
+      {
+        "location_id": 155,
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "United Arab Emirates",
+      {
+        "location_id": 156,
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "Yemen",
+      {
+        "location_id": 157,
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "South Asia",
+      {
+        "location_id": 158,
+        "level": 1,
+        "parent_id": 1
+      }
+    ],
+    [
+      "South Asia",
+      {
+        "location_id": 159,
+        "level": 2,
+        "parent_id": 158
+      }
+    ],
+    [
+      "Bangladesh",
+      {
+        "location_id": 161,
+        "level": 3,
+        "parent_id": 159
+      }
+    ],
+    [
+      "Bhutan",
+      {
+        "location_id": 162,
+        "level": 3,
+        "parent_id": 159
+      }
+    ],
+    [
+      "India",
+      {
+        "location_id": 163,
+        "level": 3,
+        "parent_id": 159
+      }
+    ],
+    [
+      "Nepal",
+      {
+        "location_id": 164,
+        "level": 3,
+        "parent_id": 159
+      }
+    ],
+    [
+      "Pakistan",
+      {
+        "location_id": 165,
+        "level": 3,
+        "parent_id": 159
+      }
+    ],
+    [
+      "Southeast Asia, East Asia, and Oceania",
+      {
+        "location_id": 4,
+        "level": 1,
+        "parent_id": 1
+      }
+    ],
+    [
+      "East Asia",
+      {
+        "location_id": 5,
+        "level": 2,
+        "parent_id": 4
+      }
+    ],
+    [
+      "China",
+      {
+        "location_id": 6,
+        "level": 3,
+        "parent_id": 5
+      }
+    ],
+    [
+      "Democratic People's Republic of Korea",
+      {
+        "location_id": 7,
+        "level": 3,
+        "parent_id": 5
+      }
+    ],
+    [
+      "Taiwan (Province of China)",
+      {
+        "location_id": 8,
+        "level": 3,
+        "parent_id": 5
+      }
+    ],
+    [
+      "Oceania",
+      {
+        "location_id": 21,
+        "level": 2,
+        "parent_id": 4
+      }
+    ],
+    [
+      "American Samoa",
+      {
+        "location_id": 298,
+        "level": 3,
+        "parent_id": 21
+      }
+    ],
+    [
+      "Cook Islands",
+      {
+        "location_id": 320,
+        "level": 3,
+        "parent_id": 21
+      }
+    ],
+    [
+      "Fiji",
+      {
+        "location_id": 22,
+        "level": 3,
+        "parent_id": 21
+      }
+    ],
+    [
+      "Guam",
+      {
+        "location_id": 351,
+        "level": 3,
+        "parent_id": 21
+      }
+    ],
+    [
+      "Kiribati",
+      {
+        "location_id": 23,
+        "level": 3,
+        "parent_id": 21
+      }
+    ],
+    [
+      "Marshall Islands",
+      {
+        "location_id": 24,
+        "level": 3,
+        "parent_id": 21
+      }
+    ],
+    [
+      "Micronesia (Federated States of)",
+      {
+        "location_id": 25,
+        "level": 3,
+        "parent_id": 21
+      }
+    ],
+    [
+      "Nauru",
+      {
+        "location_id": 369,
+        "level": 3,
+        "parent_id": 21
+      }
+    ],
+    [
+      "Niue",
+      {
+        "location_id": 374,
+        "level": 3,
+        "parent_id": 21
+      }
+    ],
+    [
+      "Northern Mariana Islands",
+      {
+        "location_id": 376,
+        "level": 3,
+        "parent_id": 21
+      }
+    ],
+    [
+      "Palau",
+      {
+        "location_id": 380,
+        "level": 3,
+        "parent_id": 21
+      }
+    ],
+    [
+      "Papua New Guinea",
+      {
+        "location_id": 26,
+        "level": 3,
+        "parent_id": 21
+      }
+    ],
+    [
+      "Samoa",
+      {
+        "location_id": 27,
+        "level": 3,
+        "parent_id": 21
+      }
+    ],
+    [
+      "Solomon Islands",
+      {
+        "location_id": 28,
+        "level": 3,
+        "parent_id": 21
+      }
+    ],
+    [
+      "Tokelau",
+      {
+        "location_id": 413,
+        "level": 3,
+        "parent_id": 21
+      }
+    ],
+    [
+      "Tonga",
+      {
+        "location_id": 29,
+        "level": 3,
+        "parent_id": 21
+      }
+    ],
+    [
+      "Tuvalu",
+      {
+        "location_id": 416,
+        "level": 3,
+        "parent_id": 21
+      }
+    ],
+    [
+      "Vanuatu",
+      {
+        "location_id": 30,
+        "level": 3,
+        "parent_id": 21
+      }
+    ],
+    [
+      "Southeast Asia",
+      {
+        "location_id": 9,
+        "level": 2,
+        "parent_id": 4
+      }
+    ],
+    [
+      "Cambodia",
+      {
+        "location_id": 10,
+        "level": 3,
+        "parent_id": 9
+      }
+    ],
+    [
+      "Indonesia",
+      {
+        "location_id": 11,
+        "level": 3,
+        "parent_id": 9
+      }
+    ],
+    [
+      "Lao People's Democratic Republic",
+      {
+        "location_id": 12,
+        "level": 3,
+        "parent_id": 9
+      }
+    ],
+    [
+      "Malaysia",
+      {
+        "location_id": 13,
+        "level": 3,
+        "parent_id": 9
+      }
+    ],
+    [
+      "Maldives",
+      {
+        "location_id": 14,
+        "level": 3,
+        "parent_id": 9
+      }
+    ],
+    [
+      "Mauritius",
+      {
+        "location_id": 183,
+        "level": 3,
+        "parent_id": 9
+      }
+    ],
+    [
+      "Myanmar",
+      {
+        "location_id": 15,
+        "level": 3,
+        "parent_id": 9
+      }
+    ],
+    [
+      "Philippines",
+      {
+        "location_id": 16,
+        "level": 3,
+        "parent_id": 9
+      }
+    ],
+    [
+      "Seychelles",
+      {
+        "location_id": 186,
+        "level": 3,
+        "parent_id": 9
+      }
+    ],
+    [
+      "Sri Lanka",
+      {
+        "location_id": 17,
+        "level": 3,
+        "parent_id": 9
+      }
+    ],
+    [
+      "Thailand",
+      {
+        "location_id": 18,
+        "level": 3,
+        "parent_id": 9
+      }
+    ],
+    [
+      "Timor-Leste",
+      {
+        "location_id": 19,
+        "level": 3,
+        "parent_id": 9
+      }
+    ],
+    [
+      "Viet Nam",
+      {
+        "location_id": 20,
+        "level": 3,
+        "parent_id": 9
+      }
+    ],
+    [
+      "Sub-Saharan Africa",
+      {
+        "location_id": 166,
+        "level": 1,
+        "parent_id": 1
+      }
+    ],
+    [
+      "Central Sub-Saharan Africa",
+      {
+        "location_id": 167,
+        "level": 2,
+        "parent_id": 166
+      }
+    ],
+    [
+      "Angola",
+      {
+        "location_id": 168,
+        "level": 3,
+        "parent_id": 167
+      }
+    ],
+    [
+      "Central African Republic",
+      {
+        "location_id": 169,
+        "level": 3,
+        "parent_id": 167
+      }
+    ],
+    [
+      "Congo",
+      {
+        "location_id": 170,
+        "level": 3,
+        "parent_id": 167
+      }
+    ],
+    [
+      "Democratic Republic of the Congo",
+      {
+        "location_id": 171,
+        "level": 3,
+        "parent_id": 167
+      }
+    ],
+    [
+      "Equatorial Guinea",
+      {
+        "location_id": 172,
+        "level": 3,
+        "parent_id": 167
+      }
+    ],
+    [
+      "Gabon",
+      {
+        "location_id": 173,
+        "level": 3,
+        "parent_id": 167
+      }
+    ],
+    [
+      "Eastern Sub-Saharan Africa",
+      {
+        "location_id": 174,
+        "level": 2,
+        "parent_id": 166
+      }
+    ],
+    [
+      "Burundi",
+      {
+        "location_id": 175,
+        "level": 3,
+        "parent_id": 174
+      }
+    ],
+    [
+      "Comoros",
+      {
+        "location_id": 176,
+        "level": 3,
+        "parent_id": 174
+      }
+    ],
+    [
+      "Djibouti",
+      {
+        "location_id": 177,
+        "level": 3,
+        "parent_id": 174
+      }
+    ],
+    [
+      "Eritrea",
+      {
+        "location_id": 178,
+        "level": 3,
+        "parent_id": 174
+      }
+    ],
+    [
+      "Ethiopia",
+      {
+        "location_id": 179,
+        "level": 3,
+        "parent_id": 174
+      }
+    ],
+    [
+      "Kenya",
+      {
+        "location_id": 180,
+        "level": 3,
+        "parent_id": 174
+      }
+    ],
+    [
+      "Madagascar",
+      {
+        "location_id": 181,
+        "level": 3,
+        "parent_id": 174
+      }
+    ],
+    [
+      "Malawi",
+      {
+        "location_id": 182,
+        "level": 3,
+        "parent_id": 174
+      }
+    ],
+    [
+      "Mozambique",
+      {
+        "location_id": 184,
+        "level": 3,
+        "parent_id": 174
+      }
+    ],
+    [
+      "Rwanda",
+      {
+        "location_id": 185,
+        "level": 3,
+        "parent_id": 174
+      }
+    ],
+    [
+      "Somalia",
+      {
+        "location_id": 187,
+        "level": 3,
+        "parent_id": 174
+      }
+    ],
+    [
+      "South Sudan",
+      {
+        "location_id": 435,
+        "level": 3,
+        "parent_id": 174
+      }
+    ],
+    [
+      "Uganda",
+      {
+        "location_id": 190,
+        "level": 3,
+        "parent_id": 174
+      }
+    ],
+    [
+      "United Republic of Tanzania",
+      {
+        "location_id": 189,
+        "level": 3,
+        "parent_id": 174
+      }
+    ],
+    [
+      "Zambia",
+      {
+        "location_id": 191,
+        "level": 3,
+        "parent_id": 174
+      }
+    ],
+    [
+      "Southern Sub-Saharan Africa",
+      {
+        "location_id": 192,
+        "level": 2,
+        "parent_id": 166
+      }
+    ],
+    [
+      "Botswana",
+      {
+        "location_id": 193,
+        "level": 3,
+        "parent_id": 192
+      }
+    ],
+    [
+      "Eswatini",
+      {
+        "location_id": 197,
+        "level": 3,
+        "parent_id": 192
+      }
+    ],
+    [
+      "Lesotho",
+      {
+        "location_id": 194,
+        "level": 3,
+        "parent_id": 192
+      }
+    ],
+    [
+      "Namibia",
+      {
+        "location_id": 195,
+        "level": 3,
+        "parent_id": 192
+      }
+    ],
+    [
+      "South Africa",
+      {
+        "location_id": 196,
+        "level": 3,
+        "parent_id": 192
+      }
+    ],
+    [
+      "Zimbabwe",
+      {
+        "location_id": 198,
+        "level": 3,
+        "parent_id": 192
+      }
+    ],
+    [
+      "Western Sub-Saharan Africa",
+      {
+        "location_id": 199,
+        "level": 2,
+        "parent_id": 166
+      }
+    ],
+    [
+      "Benin",
+      {
+        "location_id": 200,
+        "level": 3,
+        "parent_id": 199
+      }
+    ],
+    [
+      "Burkina Faso",
+      {
+        "location_id": 201,
+        "level": 3,
+        "parent_id": 199
+      }
+    ],
+    [
+      "Cabo Verde",
+      {
+        "location_id": 203,
+        "level": 3,
+        "parent_id": 199
+      }
+    ],
+    [
+      "Cameroon",
+      {
+        "location_id": 202,
+        "level": 3,
+        "parent_id": 199
+      }
+    ],
+    [
+      "Chad",
+      {
+        "location_id": 204,
+        "level": 3,
+        "parent_id": 199
+      }
+    ],
+    [
+      "Côte d'Ivoire",
+      {
+        "location_id": 205,
+        "level": 3,
+        "parent_id": 199
+      }
+    ],
+    [
+      "Gambia",
+      {
+        "location_id": 206,
+        "level": 3,
+        "parent_id": 199
+      }
+    ],
+    [
+      "Ghana",
+      {
+        "location_id": 207,
+        "level": 3,
+        "parent_id": 199
+      }
+    ],
+    [
+      "Guinea",
+      {
+        "location_id": 208,
+        "level": 3,
+        "parent_id": 199
+      }
+    ],
+    [
+      "Guinea-Bissau",
+      {
+        "location_id": 209,
+        "level": 3,
+        "parent_id": 199
+      }
+    ],
+    [
+      "Liberia",
+      {
+        "location_id": 210,
+        "level": 3,
+        "parent_id": 199
+      }
+    ],
+    [
+      "Mali",
+      {
+        "location_id": 211,
+        "level": 3,
+        "parent_id": 199
+      }
+    ],
+    [
+      "Mauritania",
+      {
+        "location_id": 212,
+        "level": 3,
+        "parent_id": 199
+      }
+    ],
+    [
+      "Niger",
+      {
+        "location_id": 213,
+        "level": 3,
+        "parent_id": 199
+      }
+    ],
+    [
+      "Nigeria",
+      {
+        "location_id": 214,
+        "level": 3,
+        "parent_id": 199
+      }
+    ],
+    [
+      "Sao Tome and Principe",
+      {
+        "location_id": 215,
+        "level": 3,
+        "parent_id": 199
+      }
+    ],
+    [
+      "Senegal",
+      {
+        "location_id": 216,
+        "level": 3,
+        "parent_id": 199
+      }
+    ],
+    [
+      "Sierra Leone",
+      {
+        "location_id": 217,
+        "level": 3,
+        "parent_id": 199
+      }
+    ],
+    [
+      "Togo",
+      {
+        "location_id": 218,
+        "level": 3,
+        "parent_id": 199
+      }
+    ]
+  ],
+  "edges": [
+    [
+      "Global",
+      "Central Europe, Eastern Europe, and Central Asia"
+    ],
+    [
+      "Central Europe, Eastern Europe, and Central Asia",
+      "Central Asia"
+    ],
+    [
+      "Central Asia",
+      "Armenia"
+    ],
+    [
+      "Central Asia",
+      "Azerbaijan"
+    ],
+    [
+      "Central Asia",
+      "Georgia"
+    ],
+    [
+      "Central Asia",
+      "Kazakhstan"
+    ],
+    [
+      "Central Asia",
+      "Kyrgyzstan"
+    ],
+    [
+      "Central Asia",
+      "Mongolia"
+    ],
+    [
+      "Central Asia",
+      "Tajikistan"
+    ],
+    [
+      "Central Asia",
+      "Turkmenistan"
+    ],
+    [
+      "Central Asia",
+      "Uzbekistan"
+    ],
+    [
+      "Central Europe, Eastern Europe, and Central Asia",
+      "Central Europe"
+    ],
+    [
+      "Central Europe",
+      "Albania"
+    ],
+    [
+      "Central Europe",
+      "Bosnia and Herzegovina"
+    ],
+    [
+      "Central Europe",
+      "Bulgaria"
+    ],
+    [
+      "Central Europe",
+      "Croatia"
+    ],
+    [
+      "Central Europe",
+      "Czechia"
+    ],
+    [
+      "Central Europe",
+      "Hungary"
+    ],
+    [
+      "Central Europe",
+      "Montenegro"
+    ],
+    [
+      "Central Europe",
+      "North Macedonia"
+    ],
+    [
+      "Central Europe",
+      "Poland"
+    ],
+    [
+      "Central Europe",
+      "Romania"
+    ],
+    [
+      "Central Europe",
+      "Serbia"
+    ],
+    [
+      "Central Europe",
+      "Slovakia"
+    ],
+    [
+      "Central Europe",
+      "Slovenia"
+    ],
+    [
+      "Central Europe, Eastern Europe, and Central Asia",
+      "Eastern Europe"
+    ],
+    [
+      "Eastern Europe",
+      "Belarus"
+    ],
+    [
+      "Eastern Europe",
+      "Estonia"
+    ],
+    [
+      "Eastern Europe",
+      "Latvia"
+    ],
+    [
+      "Eastern Europe",
+      "Lithuania"
+    ],
+    [
+      "Eastern Europe",
+      "Republic of Moldova"
+    ],
+    [
+      "Eastern Europe",
+      "Russian Federation"
+    ],
+    [
+      "Eastern Europe",
+      "Ukraine"
+    ],
+    [
+      "Global",
+      "High-income"
+    ],
+    [
+      "High-income",
+      "Australasia"
+    ],
+    [
+      "Australasia",
+      "Australia"
+    ],
+    [
+      "Australasia",
+      "New Zealand"
+    ],
+    [
+      "High-income",
+      "High-income Asia Pacific"
+    ],
+    [
+      "High-income Asia Pacific",
+      "Brunei Darussalam"
+    ],
+    [
+      "High-income Asia Pacific",
+      "Japan"
+    ],
+    [
+      "High-income Asia Pacific",
+      "Republic of Korea"
+    ],
+    [
+      "High-income Asia Pacific",
+      "Singapore"
+    ],
+    [
+      "High-income",
+      "High-income North America"
+    ],
+    [
+      "High-income North America",
+      "Canada"
+    ],
+    [
+      "High-income North America",
+      "Greenland"
+    ],
+    [
+      "High-income North America",
+      "United States of America"
+    ],
+    [
+      "High-income",
+      "Southern Latin America"
+    ],
+    [
+      "Southern Latin America",
+      "Argentina"
+    ],
+    [
+      "Southern Latin America",
+      "Chile"
+    ],
+    [
+      "Southern Latin America",
+      "Uruguay"
+    ],
+    [
+      "High-income",
+      "Western Europe"
+    ],
+    [
+      "Western Europe",
+      "Andorra"
+    ],
+    [
+      "Western Europe",
+      "Austria"
+    ],
+    [
+      "Western Europe",
+      "Belgium"
+    ],
+    [
+      "Western Europe",
+      "Cyprus"
+    ],
+    [
+      "Western Europe",
+      "Denmark"
+    ],
+    [
+      "Western Europe",
+      "Finland"
+    ],
+    [
+      "Western Europe",
+      "France"
+    ],
+    [
+      "Western Europe",
+      "Germany"
+    ],
+    [
+      "Western Europe",
+      "Greece"
+    ],
+    [
+      "Western Europe",
+      "Iceland"
+    ],
+    [
+      "Western Europe",
+      "Ireland"
+    ],
+    [
+      "Western Europe",
+      "Israel"
+    ],
+    [
+      "Western Europe",
+      "Italy"
+    ],
+    [
+      "Western Europe",
+      "Luxembourg"
+    ],
+    [
+      "Western Europe",
+      "Malta"
+    ],
+    [
+      "Western Europe",
+      "Monaco"
+    ],
+    [
+      "Western Europe",
+      "Netherlands"
+    ],
+    [
+      "Western Europe",
+      "Norway"
+    ],
+    [
+      "Western Europe",
+      "Portugal"
+    ],
+    [
+      "Western Europe",
+      "San Marino"
+    ],
+    [
+      "Western Europe",
+      "Spain"
+    ],
+    [
+      "Western Europe",
+      "Sweden"
+    ],
+    [
+      "Western Europe",
+      "Switzerland"
+    ],
+    [
+      "Western Europe",
+      "United Kingdom"
+    ],
+    [
+      "Global",
+      "Latin America and Caribbean"
+    ],
+    [
+      "Latin America and Caribbean",
+      "Andean Latin America"
+    ],
+    [
+      "Andean Latin America",
+      "Bolivia (Plurinational State of)"
+    ],
+    [
+      "Andean Latin America",
+      "Ecuador"
+    ],
+    [
+      "Andean Latin America",
+      "Peru"
+    ],
+    [
+      "Latin America and Caribbean",
+      "Caribbean"
+    ],
+    [
+      "Caribbean",
+      "Antigua and Barbuda"
+    ],
+    [
+      "Caribbean",
+      "Bahamas"
+    ],
+    [
+      "Caribbean",
+      "Barbados"
+    ],
+    [
+      "Caribbean",
+      "Belize"
+    ],
+    [
+      "Caribbean",
+      "Bermuda"
+    ],
+    [
+      "Caribbean",
+      "Cuba"
+    ],
+    [
+      "Caribbean",
+      "Dominica"
+    ],
+    [
+      "Caribbean",
+      "Dominican Republic"
+    ],
+    [
+      "Caribbean",
+      "Grenada"
+    ],
+    [
+      "Caribbean",
+      "Guyana"
+    ],
+    [
+      "Caribbean",
+      "Haiti"
+    ],
+    [
+      "Caribbean",
+      "Jamaica"
+    ],
+    [
+      "Caribbean",
+      "Puerto Rico"
+    ],
+    [
+      "Caribbean",
+      "Saint Kitts and Nevis"
+    ],
+    [
+      "Caribbean",
+      "Saint Lucia"
+    ],
+    [
+      "Caribbean",
+      "Saint Vincent and the Grenadines"
+    ],
+    [
+      "Caribbean",
+      "Suriname"
+    ],
+    [
+      "Caribbean",
+      "Trinidad and Tobago"
+    ],
+    [
+      "Caribbean",
+      "United States Virgin Islands"
+    ],
+    [
+      "Latin America and Caribbean",
+      "Central Latin America"
+    ],
+    [
+      "Central Latin America",
+      "Colombia"
+    ],
+    [
+      "Central Latin America",
+      "Costa Rica"
+    ],
+    [
+      "Central Latin America",
+      "El Salvador"
+    ],
+    [
+      "Central Latin America",
+      "Guatemala"
+    ],
+    [
+      "Central Latin America",
+      "Honduras"
+    ],
+    [
+      "Central Latin America",
+      "Mexico"
+    ],
+    [
+      "Central Latin America",
+      "Nicaragua"
+    ],
+    [
+      "Central Latin America",
+      "Panama"
+    ],
+    [
+      "Central Latin America",
+      "Venezuela (Bolivarian Republic of)"
+    ],
+    [
+      "Latin America and Caribbean",
+      "Tropical Latin America"
+    ],
+    [
+      "Tropical Latin America",
+      "Brazil"
+    ],
+    [
+      "Tropical Latin America",
+      "Paraguay"
+    ],
+    [
+      "Global",
+      "North Africa and Middle East"
+    ],
+    [
+      "North Africa and Middle East",
+      "North Africa and Middle East"
+    ],
+    [
+      "North Africa and Middle East",
+      "Afghanistan"
+    ],
+    [
+      "North Africa and Middle East",
+      "Algeria"
+    ],
+    [
+      "North Africa and Middle East",
+      "Bahrain"
+    ],
+    [
+      "North Africa and Middle East",
+      "Egypt"
+    ],
+    [
+      "North Africa and Middle East",
+      "Iran (Islamic Republic of)"
+    ],
+    [
+      "North Africa and Middle East",
+      "Iraq"
+    ],
+    [
+      "North Africa and Middle East",
+      "Jordan"
+    ],
+    [
+      "North Africa and Middle East",
+      "Kuwait"
+    ],
+    [
+      "North Africa and Middle East",
+      "Lebanon"
+    ],
+    [
+      "North Africa and Middle East",
+      "Libya"
+    ],
+    [
+      "North Africa and Middle East",
+      "Morocco"
+    ],
+    [
+      "North Africa and Middle East",
+      "Oman"
+    ],
+    [
+      "North Africa and Middle East",
+      "Palestine"
+    ],
+    [
+      "North Africa and Middle East",
+      "Qatar"
+    ],
+    [
+      "North Africa and Middle East",
+      "Saudi Arabia"
+    ],
+    [
+      "North Africa and Middle East",
+      "Sudan"
+    ],
+    [
+      "North Africa and Middle East",
+      "Syrian Arab Republic"
+    ],
+    [
+      "North Africa and Middle East",
+      "Tunisia"
+    ],
+    [
+      "North Africa and Middle East",
+      "Türkiye"
+    ],
+    [
+      "North Africa and Middle East",
+      "United Arab Emirates"
+    ],
+    [
+      "North Africa and Middle East",
+      "Yemen"
+    ],
+    [
+      "Global",
+      "South Asia"
+    ],
+    [
+      "South Asia",
+      "South Asia"
+    ],
+    [
+      "South Asia",
+      "Bangladesh"
+    ],
+    [
+      "South Asia",
+      "Bhutan"
+    ],
+    [
+      "South Asia",
+      "India"
+    ],
+    [
+      "South Asia",
+      "Nepal"
+    ],
+    [
+      "South Asia",
+      "Pakistan"
+    ],
+    [
+      "Global",
+      "Southeast Asia, East Asia, and Oceania"
+    ],
+    [
+      "Southeast Asia, East Asia, and Oceania",
+      "East Asia"
+    ],
+    [
+      "East Asia",
+      "China"
+    ],
+    [
+      "East Asia",
+      "Democratic People's Republic of Korea"
+    ],
+    [
+      "East Asia",
+      "Taiwan (Province of China)"
+    ],
+    [
+      "Southeast Asia, East Asia, and Oceania",
+      "Oceania"
+    ],
+    [
+      "Oceania",
+      "American Samoa"
+    ],
+    [
+      "Oceania",
+      "Cook Islands"
+    ],
+    [
+      "Oceania",
+      "Fiji"
+    ],
+    [
+      "Oceania",
+      "Guam"
+    ],
+    [
+      "Oceania",
+      "Kiribati"
+    ],
+    [
+      "Oceania",
+      "Marshall Islands"
+    ],
+    [
+      "Oceania",
+      "Micronesia (Federated States of)"
+    ],
+    [
+      "Oceania",
+      "Nauru"
+    ],
+    [
+      "Oceania",
+      "Niue"
+    ],
+    [
+      "Oceania",
+      "Northern Mariana Islands"
+    ],
+    [
+      "Oceania",
+      "Palau"
+    ],
+    [
+      "Oceania",
+      "Papua New Guinea"
+    ],
+    [
+      "Oceania",
+      "Samoa"
+    ],
+    [
+      "Oceania",
+      "Solomon Islands"
+    ],
+    [
+      "Oceania",
+      "Tokelau"
+    ],
+    [
+      "Oceania",
+      "Tonga"
+    ],
+    [
+      "Oceania",
+      "Tuvalu"
+    ],
+    [
+      "Oceania",
+      "Vanuatu"
+    ],
+    [
+      "Southeast Asia, East Asia, and Oceania",
+      "Southeast Asia"
+    ],
+    [
+      "Southeast Asia",
+      "Cambodia"
+    ],
+    [
+      "Southeast Asia",
+      "Indonesia"
+    ],
+    [
+      "Southeast Asia",
+      "Lao People's Democratic Republic"
+    ],
+    [
+      "Southeast Asia",
+      "Malaysia"
+    ],
+    [
+      "Southeast Asia",
+      "Maldives"
+    ],
+    [
+      "Southeast Asia",
+      "Mauritius"
+    ],
+    [
+      "Southeast Asia",
+      "Myanmar"
+    ],
+    [
+      "Southeast Asia",
+      "Philippines"
+    ],
+    [
+      "Southeast Asia",
+      "Seychelles"
+    ],
+    [
+      "Southeast Asia",
+      "Sri Lanka"
+    ],
+    [
+      "Southeast Asia",
+      "Thailand"
+    ],
+    [
+      "Southeast Asia",
+      "Timor-Leste"
+    ],
+    [
+      "Southeast Asia",
+      "Viet Nam"
+    ],
+    [
+      "Global",
+      "Sub-Saharan Africa"
+    ],
+    [
+      "Sub-Saharan Africa",
+      "Central Sub-Saharan Africa"
+    ],
+    [
+      "Central Sub-Saharan Africa",
+      "Angola"
+    ],
+    [
+      "Central Sub-Saharan Africa",
+      "Central African Republic"
+    ],
+    [
+      "Central Sub-Saharan Africa",
+      "Congo"
+    ],
+    [
+      "Central Sub-Saharan Africa",
+      "Democratic Republic of the Congo"
+    ],
+    [
+      "Central Sub-Saharan Africa",
+      "Equatorial Guinea"
+    ],
+    [
+      "Central Sub-Saharan Africa",
+      "Gabon"
+    ],
+    [
+      "Sub-Saharan Africa",
+      "Eastern Sub-Saharan Africa"
+    ],
+    [
+      "Eastern Sub-Saharan Africa",
+      "Burundi"
+    ],
+    [
+      "Eastern Sub-Saharan Africa",
+      "Comoros"
+    ],
+    [
+      "Eastern Sub-Saharan Africa",
+      "Djibouti"
+    ],
+    [
+      "Eastern Sub-Saharan Africa",
+      "Eritrea"
+    ],
+    [
+      "Eastern Sub-Saharan Africa",
+      "Ethiopia"
+    ],
+    [
+      "Eastern Sub-Saharan Africa",
+      "Kenya"
+    ],
+    [
+      "Eastern Sub-Saharan Africa",
+      "Madagascar"
+    ],
+    [
+      "Eastern Sub-Saharan Africa",
+      "Malawi"
+    ],
+    [
+      "Eastern Sub-Saharan Africa",
+      "Mozambique"
+    ],
+    [
+      "Eastern Sub-Saharan Africa",
+      "Rwanda"
+    ],
+    [
+      "Eastern Sub-Saharan Africa",
+      "Somalia"
+    ],
+    [
+      "Eastern Sub-Saharan Africa",
+      "South Sudan"
+    ],
+    [
+      "Eastern Sub-Saharan Africa",
+      "Uganda"
+    ],
+    [
+      "Eastern Sub-Saharan Africa",
+      "United Republic of Tanzania"
+    ],
+    [
+      "Eastern Sub-Saharan Africa",
+      "Zambia"
+    ],
+    [
+      "Sub-Saharan Africa",
+      "Southern Sub-Saharan Africa"
+    ],
+    [
+      "Southern Sub-Saharan Africa",
+      "Botswana"
+    ],
+    [
+      "Southern Sub-Saharan Africa",
+      "Eswatini"
+    ],
+    [
+      "Southern Sub-Saharan Africa",
+      "Lesotho"
+    ],
+    [
+      "Southern Sub-Saharan Africa",
+      "Namibia"
+    ],
+    [
+      "Southern Sub-Saharan Africa",
+      "South Africa"
+    ],
+    [
+      "Southern Sub-Saharan Africa",
+      "Zimbabwe"
+    ],
+    [
+      "Sub-Saharan Africa",
+      "Western Sub-Saharan Africa"
+    ],
+    [
+      "Western Sub-Saharan Africa",
+      "Benin"
+    ],
+    [
+      "Western Sub-Saharan Africa",
+      "Burkina Faso"
+    ],
+    [
+      "Western Sub-Saharan Africa",
+      "Cabo Verde"
+    ],
+    [
+      "Western Sub-Saharan Africa",
+      "Cameroon"
+    ],
+    [
+      "Western Sub-Saharan Africa",
+      "Chad"
+    ],
+    [
+      "Western Sub-Saharan Africa",
+      "Côte d'Ivoire"
+    ],
+    [
+      "Western Sub-Saharan Africa",
+      "Gambia"
+    ],
+    [
+      "Western Sub-Saharan Africa",
+      "Ghana"
+    ],
+    [
+      "Western Sub-Saharan Africa",
+      "Guinea"
+    ],
+    [
+      "Western Sub-Saharan Africa",
+      "Guinea-Bissau"
+    ],
+    [
+      "Western Sub-Saharan Africa",
+      "Liberia"
+    ],
+    [
+      "Western Sub-Saharan Africa",
+      "Mali"
+    ],
+    [
+      "Western Sub-Saharan Africa",
+      "Mauritania"
+    ],
+    [
+      "Western Sub-Saharan Africa",
+      "Niger"
+    ],
+    [
+      "Western Sub-Saharan Africa",
+      "Nigeria"
+    ],
+    [
+      "Western Sub-Saharan Africa",
+      "Sao Tome and Principe"
+    ],
+    [
+      "Western Sub-Saharan Africa",
+      "Senegal"
+    ],
+    [
+      "Western Sub-Saharan Africa",
+      "Sierra Leone"
+    ],
+    [
+      "Western Sub-Saharan Africa",
+      "Togo"
+    ]
+  ]
+}
