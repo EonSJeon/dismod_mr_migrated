@@ -1866,933 +1866,237 @@
     ]
   ],
   "edges": [
-    [
-      "Global",
-      "Central Europe, Eastern Europe, and Central Asia"
-    ],
-    [
-      "Central Europe, Eastern Europe, and Central Asia",
-      "Central Asia"
-    ],
-    [
-      "Central Asia",
-      "Armenia"
-    ],
-    [
-      "Central Asia",
-      "Azerbaijan"
-    ],
-    [
-      "Central Asia",
-      "Georgia"
-    ],
-    [
-      "Central Asia",
-      "Kazakhstan"
-    ],
-    [
-      "Central Asia",
-      "Kyrgyzstan"
-    ],
-    [
-      "Central Asia",
-      "Mongolia"
-    ],
-    [
-      "Central Asia",
-      "Tajikistan"
-    ],
-    [
-      "Central Asia",
-      "Turkmenistan"
-    ],
-    [
-      "Central Asia",
-      "Uzbekistan"
-    ],
-    [
-      "Central Europe, Eastern Europe, and Central Asia",
-      "Central Europe"
-    ],
-    [
-      "Central Europe",
-      "Albania"
-    ],
-    [
-      "Central Europe",
-      "Bosnia and Herzegovina"
-    ],
-    [
-      "Central Europe",
-      "Bulgaria"
-    ],
-    [
-      "Central Europe",
-      "Croatia"
-    ],
-    [
-      "Central Europe",
-      "Czechia"
-    ],
-    [
-      "Central Europe",
-      "Hungary"
-    ],
-    [
-      "Central Europe",
-      "Montenegro"
-    ],
-    [
-      "Central Europe",
-      "North Macedonia"
-    ],
-    [
-      "Central Europe",
-      "Poland"
-    ],
-    [
-      "Central Europe",
-      "Romania"
-    ],
-    [
-      "Central Europe",
-      "Serbia"
-    ],
-    [
-      "Central Europe",
-      "Slovakia"
-    ],
-    [
-      "Central Europe",
-      "Slovenia"
-    ],
-    [
-      "Central Europe, Eastern Europe, and Central Asia",
-      "Eastern Europe"
-    ],
-    [
-      "Eastern Europe",
-      "Belarus"
-    ],
-    [
-      "Eastern Europe",
-      "Estonia"
-    ],
-    [
-      "Eastern Europe",
-      "Latvia"
-    ],
-    [
-      "Eastern Europe",
-      "Lithuania"
-    ],
-    [
-      "Eastern Europe",
-      "Republic of Moldova"
-    ],
-    [
-      "Eastern Europe",
-      "Russian Federation"
-    ],
-    [
-      "Eastern Europe",
-      "Ukraine"
-    ],
-    [
-      "Global",
-      "High-income"
-    ],
-    [
-      "High-income",
-      "Australasia"
-    ],
-    [
-      "Australasia",
-      "Australia"
-    ],
-    [
-      "Australasia",
-      "New Zealand"
-    ],
-    [
-      "High-income",
-      "High-income Asia Pacific"
-    ],
-    [
-      "High-income Asia Pacific",
-      "Brunei Darussalam"
-    ],
-    [
-      "High-income Asia Pacific",
-      "Japan"
-    ],
-    [
-      "High-income Asia Pacific",
-      "Republic of Korea"
-    ],
-    [
-      "High-income Asia Pacific",
-      "Singapore"
-    ],
-    [
-      "High-income",
-      "High-income North America"
-    ],
-    [
-      "High-income North America",
-      "Canada"
-    ],
-    [
-      "High-income North America",
-      "Greenland"
-    ],
-    [
-      "High-income North America",
-      "United States of America"
-    ],
-    [
-      "High-income",
-      "Southern Latin America"
-    ],
-    [
-      "Southern Latin America",
-      "Argentina"
-    ],
-    [
-      "Southern Latin America",
-      "Chile"
-    ],
-    [
-      "Southern Latin America",
-      "Uruguay"
-    ],
-    [
-      "High-income",
-      "Western Europe"
-    ],
-    [
-      "Western Europe",
-      "Andorra"
-    ],
-    [
-      "Western Europe",
-      "Austria"
-    ],
-    [
-      "Western Europe",
-      "Belgium"
-    ],
-    [
-      "Western Europe",
-      "Cyprus"
-    ],
-    [
-      "Western Europe",
-      "Denmark"
-    ],
-    [
-      "Western Europe",
-      "Finland"
-    ],
-    [
-      "Western Europe",
-      "France"
-    ],
-    [
-      "Western Europe",
-      "Germany"
-    ],
-    [
-      "Western Europe",
-      "Greece"
-    ],
-    [
-      "Western Europe",
-      "Iceland"
-    ],
-    [
-      "Western Europe",
-      "Ireland"
-    ],
-    [
-      "Western Europe",
-      "Israel"
-    ],
-    [
-      "Western Europe",
-      "Italy"
-    ],
-    [
-      "Western Europe",
-      "Luxembourg"
-    ],
-    [
-      "Western Europe",
-      "Malta"
-    ],
-    [
-      "Western Europe",
-      "Monaco"
-    ],
-    [
-      "Western Europe",
-      "Netherlands"
-    ],
-    [
-      "Western Europe",
-      "Norway"
-    ],
-    [
-      "Western Europe",
-      "Portugal"
-    ],
-    [
-      "Western Europe",
-      "San Marino"
-    ],
-    [
-      "Western Europe",
-      "Spain"
-    ],
-    [
-      "Western Europe",
-      "Sweden"
-    ],
-    [
-      "Western Europe",
-      "Switzerland"
-    ],
-    [
-      "Western Europe",
-      "United Kingdom"
-    ],
-    [
-      "Global",
-      "Latin America and Caribbean"
-    ],
-    [
-      "Latin America and Caribbean",
-      "Andean Latin America"
-    ],
-    [
-      "Andean Latin America",
-      "Bolivia (Plurinational State of)"
-    ],
-    [
-      "Andean Latin America",
-      "Ecuador"
-    ],
-    [
-      "Andean Latin America",
-      "Peru"
-    ],
-    [
-      "Latin America and Caribbean",
-      "Caribbean"
-    ],
-    [
-      "Caribbean",
-      "Antigua and Barbuda"
-    ],
-    [
-      "Caribbean",
-      "Bahamas"
-    ],
-    [
-      "Caribbean",
-      "Barbados"
-    ],
-    [
-      "Caribbean",
-      "Belize"
-    ],
-    [
-      "Caribbean",
-      "Bermuda"
-    ],
-    [
-      "Caribbean",
-      "Cuba"
-    ],
-    [
-      "Caribbean",
-      "Dominica"
-    ],
-    [
-      "Caribbean",
-      "Dominican Republic"
-    ],
-    [
-      "Caribbean",
-      "Grenada"
-    ],
-    [
-      "Caribbean",
-      "Guyana"
-    ],
-    [
-      "Caribbean",
-      "Haiti"
-    ],
-    [
-      "Caribbean",
-      "Jamaica"
-    ],
-    [
-      "Caribbean",
-      "Puerto Rico"
-    ],
-    [
-      "Caribbean",
-      "Saint Kitts and Nevis"
-    ],
-    [
-      "Caribbean",
-      "Saint Lucia"
-    ],
-    [
-      "Caribbean",
-      "Saint Vincent and the Grenadines"
-    ],
-    [
-      "Caribbean",
-      "Suriname"
-    ],
-    [
-      "Caribbean",
-      "Trinidad and Tobago"
-    ],
-    [
-      "Caribbean",
-      "United States Virgin Islands"
-    ],
-    [
-      "Latin America and Caribbean",
-      "Central Latin America"
-    ],
-    [
-      "Central Latin America",
-      "Colombia"
-    ],
-    [
-      "Central Latin America",
-      "Costa Rica"
-    ],
-    [
-      "Central Latin America",
-      "El Salvador"
-    ],
-    [
-      "Central Latin America",
-      "Guatemala"
-    ],
-    [
-      "Central Latin America",
-      "Honduras"
-    ],
-    [
-      "Central Latin America",
-      "Mexico"
-    ],
-    [
-      "Central Latin America",
-      "Nicaragua"
-    ],
-    [
-      "Central Latin America",
-      "Panama"
-    ],
-    [
-      "Central Latin America",
-      "Venezuela (Bolivarian Republic of)"
-    ],
-    [
-      "Latin America and Caribbean",
-      "Tropical Latin America"
-    ],
-    [
-      "Tropical Latin America",
-      "Brazil"
-    ],
-    [
-      "Tropical Latin America",
-      "Paraguay"
-    ],
-    [
-      "Global",
-      "North Africa and Middle East"
-    ],
-    [
-      "North Africa and Middle East",
-      "North Africa and Middle East"
-    ],
-    [
-      "North Africa and Middle East",
-      "Afghanistan"
-    ],
-    [
-      "North Africa and Middle East",
-      "Algeria"
-    ],
-    [
-      "North Africa and Middle East",
-      "Bahrain"
-    ],
-    [
-      "North Africa and Middle East",
-      "Egypt"
-    ],
-    [
-      "North Africa and Middle East",
-      "Iran (Islamic Republic of)"
-    ],
-    [
-      "North Africa and Middle East",
-      "Iraq"
-    ],
-    [
-      "North Africa and Middle East",
-      "Jordan"
-    ],
-    [
-      "North Africa and Middle East",
-      "Kuwait"
-    ],
-    [
-      "North Africa and Middle East",
-      "Lebanon"
-    ],
-    [
-      "North Africa and Middle East",
-      "Libya"
-    ],
-    [
-      "North Africa and Middle East",
-      "Morocco"
-    ],
-    [
-      "North Africa and Middle East",
-      "Oman"
-    ],
-    [
-      "North Africa and Middle East",
-      "Palestine"
-    ],
-    [
-      "North Africa and Middle East",
-      "Qatar"
-    ],
-    [
-      "North Africa and Middle East",
-      "Saudi Arabia"
-    ],
-    [
-      "North Africa and Middle East",
-      "Sudan"
-    ],
-    [
-      "North Africa and Middle East",
-      "Syrian Arab Republic"
-    ],
-    [
-      "North Africa and Middle East",
-      "Tunisia"
-    ],
-    [
-      "North Africa and Middle East",
-      "Türkiye"
-    ],
-    [
-      "North Africa and Middle East",
-      "United Arab Emirates"
-    ],
-    [
-      "North Africa and Middle East",
-      "Yemen"
-    ],
-    [
-      "Global",
-      "South Asia"
-    ],
-    [
-      "South Asia",
-      "South Asia"
-    ],
-    [
-      "South Asia",
-      "Bangladesh"
-    ],
-    [
-      "South Asia",
-      "Bhutan"
-    ],
-    [
-      "South Asia",
-      "India"
-    ],
-    [
-      "South Asia",
-      "Nepal"
-    ],
-    [
-      "South Asia",
-      "Pakistan"
-    ],
-    [
-      "Global",
-      "Southeast Asia, East Asia, and Oceania"
-    ],
-    [
-      "Southeast Asia, East Asia, and Oceania",
-      "East Asia"
-    ],
-    [
-      "East Asia",
-      "China"
-    ],
-    [
-      "East Asia",
-      "Democratic People's Republic of Korea"
-    ],
-    [
-      "East Asia",
-      "Taiwan (Province of China)"
-    ],
-    [
-      "Southeast Asia, East Asia, and Oceania",
-      "Oceania"
-    ],
-    [
-      "Oceania",
-      "American Samoa"
-    ],
-    [
-      "Oceania",
-      "Cook Islands"
-    ],
-    [
-      "Oceania",
-      "Fiji"
-    ],
-    [
-      "Oceania",
-      "Guam"
-    ],
-    [
-      "Oceania",
-      "Kiribati"
-    ],
-    [
-      "Oceania",
-      "Marshall Islands"
-    ],
-    [
-      "Oceania",
-      "Micronesia (Federated States of)"
-    ],
-    [
-      "Oceania",
-      "Nauru"
-    ],
-    [
-      "Oceania",
-      "Niue"
-    ],
-    [
-      "Oceania",
-      "Northern Mariana Islands"
-    ],
-    [
-      "Oceania",
-      "Palau"
-    ],
-    [
-      "Oceania",
-      "Papua New Guinea"
-    ],
-    [
-      "Oceania",
-      "Samoa"
-    ],
-    [
-      "Oceania",
-      "Solomon Islands"
-    ],
-    [
-      "Oceania",
-      "Tokelau"
-    ],
-    [
-      "Oceania",
-      "Tonga"
-    ],
-    [
-      "Oceania",
-      "Tuvalu"
-    ],
-    [
-      "Oceania",
-      "Vanuatu"
-    ],
-    [
-      "Southeast Asia, East Asia, and Oceania",
-      "Southeast Asia"
-    ],
-    [
-      "Southeast Asia",
-      "Cambodia"
-    ],
-    [
-      "Southeast Asia",
-      "Indonesia"
-    ],
-    [
-      "Southeast Asia",
-      "Lao People's Democratic Republic"
-    ],
-    [
-      "Southeast Asia",
-      "Malaysia"
-    ],
-    [
-      "Southeast Asia",
-      "Maldives"
-    ],
-    [
-      "Southeast Asia",
-      "Mauritius"
-    ],
-    [
-      "Southeast Asia",
-      "Myanmar"
-    ],
-    [
-      "Southeast Asia",
-      "Philippines"
-    ],
-    [
-      "Southeast Asia",
-      "Seychelles"
-    ],
-    [
-      "Southeast Asia",
-      "Sri Lanka"
-    ],
-    [
-      "Southeast Asia",
-      "Thailand"
-    ],
-    [
-      "Southeast Asia",
-      "Timor-Leste"
-    ],
-    [
-      "Southeast Asia",
-      "Viet Nam"
-    ],
-    [
-      "Global",
-      "Sub-Saharan Africa"
-    ],
-    [
-      "Sub-Saharan Africa",
-      "Central Sub-Saharan Africa"
-    ],
-    [
-      "Central Sub-Saharan Africa",
-      "Angola"
-    ],
-    [
-      "Central Sub-Saharan Africa",
-      "Central African Republic"
-    ],
-    [
-      "Central Sub-Saharan Africa",
-      "Congo"
-    ],
-    [
-      "Central Sub-Saharan Africa",
-      "Democratic Republic of the Congo"
-    ],
-    [
-      "Central Sub-Saharan Africa",
-      "Equatorial Guinea"
-    ],
-    [
-      "Central Sub-Saharan Africa",
-      "Gabon"
-    ],
-    [
-      "Sub-Saharan Africa",
-      "Eastern Sub-Saharan Africa"
-    ],
-    [
-      "Eastern Sub-Saharan Africa",
-      "Burundi"
-    ],
-    [
-      "Eastern Sub-Saharan Africa",
-      "Comoros"
-    ],
-    [
-      "Eastern Sub-Saharan Africa",
-      "Djibouti"
-    ],
-    [
-      "Eastern Sub-Saharan Africa",
-      "Eritrea"
-    ],
-    [
-      "Eastern Sub-Saharan Africa",
-      "Ethiopia"
-    ],
-    [
-      "Eastern Sub-Saharan Africa",
-      "Kenya"
-    ],
-    [
-      "Eastern Sub-Saharan Africa",
-      "Madagascar"
-    ],
-    [
-      "Eastern Sub-Saharan Africa",
-      "Malawi"
-    ],
-    [
-      "Eastern Sub-Saharan Africa",
-      "Mozambique"
-    ],
-    [
-      "Eastern Sub-Saharan Africa",
-      "Rwanda"
-    ],
-    [
-      "Eastern Sub-Saharan Africa",
-      "Somalia"
-    ],
-    [
-      "Eastern Sub-Saharan Africa",
-      "South Sudan"
-    ],
-    [
-      "Eastern Sub-Saharan Africa",
-      "Uganda"
-    ],
-    [
-      "Eastern Sub-Saharan Africa",
-      "United Republic of Tanzania"
-    ],
-    [
-      "Eastern Sub-Saharan Africa",
-      "Zambia"
-    ],
-    [
-      "Sub-Saharan Africa",
-      "Southern Sub-Saharan Africa"
-    ],
-    [
-      "Southern Sub-Saharan Africa",
-      "Botswana"
-    ],
-    [
-      "Southern Sub-Saharan Africa",
-      "Eswatini"
-    ],
-    [
-      "Southern Sub-Saharan Africa",
-      "Lesotho"
-    ],
-    [
-      "Southern Sub-Saharan Africa",
-      "Namibia"
-    ],
-    [
-      "Southern Sub-Saharan Africa",
-      "South Africa"
-    ],
-    [
-      "Southern Sub-Saharan Africa",
-      "Zimbabwe"
-    ],
-    [
-      "Sub-Saharan Africa",
-      "Western Sub-Saharan Africa"
-    ],
-    [
-      "Western Sub-Saharan Africa",
-      "Benin"
-    ],
-    [
-      "Western Sub-Saharan Africa",
-      "Burkina Faso"
-    ],
-    [
-      "Western Sub-Saharan Africa",
-      "Cabo Verde"
-    ],
-    [
-      "Western Sub-Saharan Africa",
-      "Cameroon"
-    ],
-    [
-      "Western Sub-Saharan Africa",
-      "Chad"
-    ],
-    [
-      "Western Sub-Saharan Africa",
-      "Côte d'Ivoire"
-    ],
-    [
-      "Western Sub-Saharan Africa",
-      "Gambia"
-    ],
-    [
-      "Western Sub-Saharan Africa",
-      "Ghana"
-    ],
-    [
-      "Western Sub-Saharan Africa",
-      "Guinea"
-    ],
-    [
-      "Western Sub-Saharan Africa",
-      "Guinea-Bissau"
-    ],
-    [
-      "Western Sub-Saharan Africa",
-      "Liberia"
-    ],
-    [
-      "Western Sub-Saharan Africa",
-      "Mali"
-    ],
-    [
-      "Western Sub-Saharan Africa",
-      "Mauritania"
-    ],
-    [
-      "Western Sub-Saharan Africa",
-      "Niger"
-    ],
-    [
-      "Western Sub-Saharan Africa",
-      "Nigeria"
-    ],
-    [
-      "Western Sub-Saharan Africa",
-      "Sao Tome and Principe"
-    ],
-    [
-      "Western Sub-Saharan Africa",
-      "Senegal"
-    ],
-    [
-      "Western Sub-Saharan Africa",
-      "Sierra Leone"
-    ],
-    [
-      "Western Sub-Saharan Africa",
-      "Togo"
-    ]
+    ["Global", "Central Europe, Eastern Europe, and Central Asia"],
+    ["Central Europe, Eastern Europe, and Central Asia", "Central Asia"],
+    ["Central Asia", "Armenia"],
+    ["Central Asia", "Azerbaijan"],
+    ["Central Asia", "Georgia"],
+    ["Central Asia", "Kazakhstan"],
+    ["Central Asia", "Kyrgyzstan"],
+    ["Central Asia", "Mongolia"],
+    ["Central Asia", "Tajikistan"],
+    ["Central Asia", "Turkmenistan"],
+    ["Central Asia", "Uzbekistan"],
+    ["Central Europe, Eastern Europe, and Central Asia", "Central Europe"],
+    ["Central Europe", "Albania"],
+    ["Central Europe", "Bosnia and Herzegovina"],
+    ["Central Europe", "Bulgaria"],
+    ["Central Europe", "Croatia"],
+    ["Central Europe", "Czechia"],
+    ["Central Europe", "Hungary"],
+    ["Central Europe", "Montenegro"],
+    ["Central Europe", "North Macedonia"],
+    ["Central Europe", "Poland"],
+    ["Central Europe", "Romania"],
+    ["Central Europe", "Serbia"],
+    ["Central Europe", "Slovakia"],
+    ["Central Europe", "Slovenia"],
+    ["Central Europe, Eastern Europe, and Central Asia", "Eastern Europe"],
+    ["Eastern Europe", "Belarus"],
+    ["Eastern Europe", "Estonia"],
+    ["Eastern Europe", "Latvia"],
+    ["Eastern Europe", "Lithuania"],
+    ["Eastern Europe", "Republic of Moldova"],
+    ["Eastern Europe", "Russian Federation"],
+    ["Eastern Europe", "Ukraine"],
+    ["Global", "High-income"],
+    ["High-income", "Australasia"],
+    ["Australasia", "Australia"],
+    ["Australasia", "New Zealand"],
+    ["High-income", "High-income Asia Pacific"],
+    ["High-income Asia Pacific", "Brunei Darussalam"],
+    ["High-income Asia Pacific", "Japan"],
+    ["High-income Asia Pacific", "Republic of Korea"],
+    ["High-income Asia Pacific", "Singapore"],
+    ["High-income", "High-income North America"],
+    ["High-income North America", "Canada"],
+    ["High-income North America", "Greenland"],
+    ["High-income North America", "United States of America"],
+    ["High-income", "Southern Latin America"],
+    ["Southern Latin America", "Argentina"],
+    ["Southern Latin America", "Chile"],
+    ["Southern Latin America", "Uruguay"],
+    ["High-income", "Western Europe"],
+    ["Western Europe", "Andorra"],
+    ["Western Europe", "Austria"],
+    ["Western Europe", "Belgium"],
+    ["Western Europe", "Cyprus"],
+    ["Western Europe", "Denmark"],
+    ["Western Europe", "Finland"],
+    ["Western Europe", "France"],
+    ["Western Europe", "Germany"],
+    ["Western Europe", "Greece"],
+    ["Western Europe", "Iceland"],
+    ["Western Europe", "Ireland"],
+    ["Western Europe", "Israel"],
+    ["Western Europe", "Italy"],
+    ["Western Europe", "Luxembourg"],
+    ["Western Europe", "Malta"],
+    ["Western Europe", "Monaco"],
+    ["Western Europe", "Netherlands"],
+    ["Western Europe", "Norway"],
+    ["Western Europe", "Portugal"],
+    ["Western Europe", "San Marino"],
+    ["Western Europe", "Spain"],
+    ["Western Europe", "Sweden"],
+    ["Western Europe", "Switzerland"],
+    ["Western Europe", "United Kingdom"],
+    ["Global", "Latin America and Caribbean"],
+    ["Latin America and Caribbean", "Andean Latin America"],
+    ["Andean Latin America", "Bolivia (Plurinational State of)"],
+    ["Andean Latin America", "Ecuador"],
+    ["Andean Latin America", "Peru"],
+    ["Latin America and Caribbean", "Caribbean"],
+    ["Caribbean", "Antigua and Barbuda"],
+    ["Caribbean", "Bahamas"],
+    ["Caribbean", "Barbados"],
+    ["Caribbean", "Belize"],
+    ["Caribbean", "Bermuda"],
+    ["Caribbean", "Cuba"],
+    ["Caribbean", "Dominica"],
+    ["Caribbean", "Dominican Republic"],
+    ["Caribbean", "Grenada"],
+    ["Caribbean", "Guyana"],
+    ["Caribbean", "Haiti"],
+    ["Caribbean", "Jamaica"],
+    ["Caribbean", "Puerto Rico"],
+    ["Caribbean", "Saint Kitts and Nevis"],
+    ["Caribbean", "Saint Lucia"],
+    ["Caribbean", "Saint Vincent and the Grenadines"],
+    ["Caribbean", "Suriname"],
+    ["Caribbean", "Trinidad and Tobago"],
+    ["Caribbean", "United States Virgin Islands"],
+    ["Latin America and Caribbean", "Central Latin America"],
+    ["Central Latin America", "Colombia"],
+    ["Central Latin America", "Costa Rica"],
+    ["Central Latin America", "El Salvador"],
+    ["Central Latin America", "Guatemala"],
+    ["Central Latin America", "Honduras"],
+    ["Central Latin America", "Mexico"],
+    ["Central Latin America", "Nicaragua"],
+    ["Central Latin America", "Panama"],
+    ["Central Latin America", "Venezuela (Bolivarian Republic of)"],
+    ["Latin America and Caribbean", "Tropical Latin America"],
+    ["Tropical Latin America", "Brazil"],
+    ["Tropical Latin America", "Paraguay"],
+    ["Global", "North Africa and Middle East"],
+    ["North Africa and Middle East", "North Africa and Middle East"],
+    ["North Africa and Middle East", "Afghanistan"],
+    ["North Africa and Middle East", "Algeria"],
+    ["North Africa and Middle East", "Bahrain"],
+    ["North Africa and Middle East", "Egypt"],
+    ["North Africa and Middle East", "Iran (Islamic Republic of)"],
+    ["North Africa and Middle East", "Iraq"],
+    ["North Africa and Middle East", "Jordan"],
+    ["North Africa and Middle East", "Kuwait"],
+    ["North Africa and Middle East", "Lebanon"],
+    ["North Africa and Middle East", "Libya"],
+    ["North Africa and Middle East", "Morocco"],
+    ["North Africa and Middle East", "Oman"],
+    ["North Africa and Middle East", "Palestine"],
+    ["North Africa and Middle East", "Qatar"],
+    ["North Africa and Middle East", "Saudi Arabia"],
+    ["North Africa and Middle East", "Sudan"],
+    ["North Africa and Middle East", "Syrian Arab Republic"],
+    ["North Africa and Middle East", "Tunisia"],
+    ["North Africa and Middle East", "Türkiye"],
+    ["North Africa and Middle East", "United Arab Emirates"],
+    ["North Africa and Middle East", "Yemen"],
+    ["Global", "South Asia"],
+    ["South Asia", "South Asia"],
+    ["South Asia", "Bangladesh"],
+    ["South Asia", "Bhutan"],
+    ["South Asia", "India"],
+    ["South Asia", "Nepal"],
+    ["South Asia", "Pakistan"],
+    ["Global", "Southeast Asia, East Asia, and Oceania"],
+    ["Southeast Asia, East Asia, and Oceania", "East Asia"],
+    ["East Asia", "China"],
+    ["East Asia", "Democratic People's Republic of Korea"],
+    ["East Asia", "Taiwan (Province of China)"],
+    ["Southeast Asia, East Asia, and Oceania", "Oceania"],
+    ["Oceania", "American Samoa"],
+    ["Oceania", "Cook Islands"],
+    ["Oceania", "Fiji"],
+    ["Oceania", "Guam"],
+    ["Oceania", "Kiribati"],
+    ["Oceania", "Marshall Islands"],
+    ["Oceania", "Micronesia (Federated States of)"],
+    ["Oceania", "Nauru"],
+    ["Oceania", "Niue"],
+    ["Oceania", "Northern Mariana Islands"],
+    ["Oceania", "Palau"],
+    ["Oceania", "Papua New Guinea"],
+    ["Oceania", "Samoa"],
+    ["Oceania", "Solomon Islands"],
+    ["Oceania", "Tokelau"],
+    ["Oceania", "Tonga"],
+    ["Oceania", "Tuvalu"],
+    ["Oceania", "Vanuatu"],
+    ["Southeast Asia, East Asia, and Oceania", "Southeast Asia"],
+    ["Southeast Asia", "Cambodia"],
+    ["Southeast Asia", "Indonesia"],
+    ["Southeast Asia", "Lao People's Democratic Republic"],
+    ["Southeast Asia", "Malaysia"],
+    ["Southeast Asia", "Maldives"],
+    ["Southeast Asia", "Mauritius"],
+    ["Southeast Asia", "Myanmar"],
+    ["Southeast Asia", "Philippines"],
+    ["Southeast Asia", "Seychelles"],
+    ["Southeast Asia", "Sri Lanka"],
+    ["Southeast Asia", "Thailand"],
+    ["Southeast Asia", "Timor-Leste"],
+    ["Southeast Asia", "Viet Nam"],
+    ["Global", "Sub-Saharan Africa"],
+    ["Sub-Saharan Africa", "Central Sub-Saharan Africa"],
+    ["Central Sub-Saharan Africa", "Angola"],
+    ["Central Sub-Saharan Africa", "Central African Republic"],
+    ["Central Sub-Saharan Africa", "Congo"],
+    ["Central Sub-Saharan Africa", "Democratic Republic of the Congo"],
+    ["Central Sub-Saharan Africa", "Equatorial Guinea"],
+    ["Central Sub-Saharan Africa", "Gabon"],
+    ["Sub-Saharan Africa", "Eastern Sub-Saharan Africa"],
+    ["Eastern Sub-Saharan Africa", "Burundi"],
+    ["Eastern Sub-Saharan Africa", "Comoros"],
+    ["Eastern Sub-Saharan Africa", "Djibouti"],
+    ["Eastern Sub-Saharan Africa", "Eritrea"],
+    ["Eastern Sub-Saharan Africa", "Ethiopia"],
+    ["Eastern Sub-Saharan Africa", "Kenya"],
+    ["Eastern Sub-Saharan Africa", "Madagascar"],
+    ["Eastern Sub-Saharan Africa", "Malawi"],
+    ["Eastern Sub-Saharan Africa", "Mozambique"],
+    ["Eastern Sub-Saharan Africa", "Rwanda"],
+    ["Eastern Sub-Saharan Africa", "Somalia"],
+    ["Eastern Sub-Saharan Africa", "South Sudan"],
+    ["Eastern Sub-Saharan Africa", "Uganda"],
+    ["Eastern Sub-Saharan Africa", "United Republic of Tanzania"],
+    ["Eastern Sub-Saharan Africa", "Zambia"],
+    ["Sub-Saharan Africa", "Southern Sub-Saharan Africa"],
+    ["Southern Sub-Saharan Africa", "Botswana"],
+    ["Southern Sub-Saharan Africa", "Eswatini"],
+    ["Southern Sub-Saharan Africa", "Lesotho"],
+    ["Southern Sub-Saharan Africa", "Namibia"],
+    ["Southern Sub-Saharan Africa", "South Africa"],
+    ["Southern Sub-Saharan Africa", "Zimbabwe"],
+    ["Sub-Saharan Africa", "Western Sub-Saharan Africa"],
+    ["Western Sub-Saharan Africa", "Benin"],
+    ["Western Sub-Saharan Africa", "Burkina Faso"],
+    ["Western Sub-Saharan Africa", "Cabo Verde"],
+    ["Western Sub-Saharan Africa", "Cameroon"],
+    ["Western Sub-Saharan Africa", "Chad"],
+    ["Western Sub-Saharan Africa", "Côte d'Ivoire"],
+    ["Western Sub-Saharan Africa", "Gambia"],
+    ["Western Sub-Saharan Africa", "Ghana"],
+    ["Western Sub-Saharan Africa", "Guinea"],
+    ["Western Sub-Saharan Africa", "Guinea-Bissau"],
+    ["Western Sub-Saharan Africa", "Liberia"],
+    ["Western Sub-Saharan Africa", "Mali"],
+    ["Western Sub-Saharan Africa", "Mauritania"],
+    ["Western Sub-Saharan Africa", "Niger"],
+    ["Western Sub-Saharan Africa", "Nigeria"],
+    ["Western Sub-Saharan Africa", "Sao Tome and Principe"],
+    ["Western Sub-Saharan Africa", "Senegal"],
+    ["Western Sub-Saharan Africa", "Sierra Leone"],
+    ["Western Sub-Saharan Africa", "Togo"]
   ]
 }
