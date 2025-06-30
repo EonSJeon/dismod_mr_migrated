@@ -407,8 +407,6 @@ def mean_covariate_model(mu: at.TensorVariable) -> at.TensorVariable:
 
 
 def dispersion_covariate_model(
-    data_type: str,
-    input_data: pd.DataFrame,
     delta_lb: float,
     delta_ub: float,
 ) -> Dict[str, Any]:
@@ -417,10 +415,6 @@ def dispersion_covariate_model(
 
     Parameters
     ----------
-    data_type : str
-        모델 접두어 (예: 'p', 'i', 'r' 등)
-    input_data : pd.DataFrame
-        공변량(z_*) 컬럼이 포함된 DataFrame
     delta_lb : float
         delta 하한 (양수)
     delta_ub : float
@@ -434,9 +428,15 @@ def dispersion_covariate_model(
         - zeta  : [Normal RV vector]  # Z가 있을 때만 반환
         - delta : [Deterministic]      # exp(eta + Z @ zeta) 또는 exp(eta) * ones
     """
-    # ─── 0) 현재 PyMC 모델 컨텍스트를 가져와야 합니다 ─────────────────────────
-    model = pm.modelcontext(None)
-    assert model is not None, "dispersion_covariate_model must be called within a PyMC model"
+
+    # --------------------------- 1) initialize pm_model ---------------------------   
+    pm_model = pm.modelcontext(None) # at reforged_mr/model/covariates/dispersion_covariate_model()
+
+
+    # --------------------------- 2) extract shared data ---------------------------   
+    data_type = pm_model.shared_data["data_type"]
+    input_data = pm_model.shared_data["data"]
+
 
     # ─── 1) log(delta)의 하한/상한 계산 ──────────────────────────────────────
     lower = np.log(delta_lb)
@@ -461,7 +461,7 @@ def dispersion_covariate_model(
     # ─── 4) Z가 하나라도 있을 때 ───────────────────────────────────────────
     if len(Z.columns) > 0:
         # (가) “covariate” 차원(coord) 먼저 등록
-        model.add_coord("covariate", Z.columns.tolist(), mutable=False)
+        pm_model.add_coord("covariate", Z.columns.tolist(), mutable=False)
 
         # (나) zeta ~ Normal(0, 0.25) 벡터, 길이 = len(Z.columns)
         zeta = pm.Normal(
@@ -473,7 +473,7 @@ def dispersion_covariate_model(
         )
 
         # (다) “obs_dim” 차원(coord) 등록 (관측 개수만큼)
-        model.add_coord("obs_dim", np.arange(len(input_data)), mutable=False)
+        pm_model.add_coord("obs_dim", np.arange(len(input_data)), mutable=False)
 
         # (라) delta = exp(eta + Z.values @ zeta) 를 Deterministic으로 등록
         delta = pm.Deterministic(
@@ -482,17 +482,13 @@ def dispersion_covariate_model(
             dims=("obs_dim",),
         )
 
-        return {
-            "eta":   [eta],
-            "Z":      Z,
-            "zeta": [zeta],
-            "delta": [delta],
-        }
+        return delta
+
 
     # ─── 5) Z가 없을 때 ────────────────────────────────────────────────────
     else:
         # (가) “obs_dim” 차원(coord) 등록
-        model.add_coord("obs_dim", np.arange(len(input_data)), mutable=False)
+        pm_model.add_coord("obs_dim", np.arange(len(input_data)), mutable=False)
 
         # (나) delta = exp(eta) * ones(len(input_data)) 형태로 생성
         const_delta = pm.Deterministic(
@@ -501,14 +497,7 @@ def dispersion_covariate_model(
             dims=("obs_dim",),
         )
 
-        return {
-            "eta":   [eta],
-            "Z":      Z,            # 빈 DataFrame일 수도 있음
-            "zeta": [],             # 공변량이 없으므로 빈 리스트
-            "delta": [const_delta],
-        }
-
-
+        return const_delta
 
 
 def predict_for(
