@@ -10,7 +10,7 @@ import pytensor   # 추가된 import
 # ------------------------------
 # Age integrating models
 # ------------------------------
-def age_standardize_approx(mu_age: at.TensorVariable) -> at.TensorVariable:
+def age_standardize_approx(mu_age: at.TensorVariable, use_lb_data: bool = False) -> at.TensorVariable:
     """
     Approximate interval average of mu_age over [age_start, age_end] with weights.
     Returns dict with 'mu_interval' deterministic.
@@ -28,9 +28,24 @@ def age_standardize_approx(mu_age: at.TensorVariable) -> at.TensorVariable:
 
     age_start = data["age_start"]
     age_end = data["age_end"]
-    
 
-    # 1) cumulative weights (NumPy)
+    if use_lb_data:
+        data_type = f'lb_{data_type}'
+
+        lb_data = pm_model.shared_data["lb_data"]
+        age_start = lb_data["age_start"]
+        age_end = lb_data["age_end"]
+
+
+    # 1) cumulative weights (NumPy) - ensure age_weights has same length as ages
+    if len(age_weights) != len(ages):
+        # Truncate or pad age_weights to match ages length
+        if len(age_weights) > len(ages):
+            age_weights = age_weights[:len(ages)]
+        else:
+            # Pad with zeros if age_weights is shorter
+            age_weights = np.pad(age_weights, (0, len(ages) - len(age_weights)), 'constant')
+    
     cum_wt_np = np.cumsum(age_weights)
 
     # 2) clip and convert age_start/age_end to integer indices into 'ages'

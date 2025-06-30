@@ -170,5 +170,6 @@ def spline() -> at.TensorVariable:
         print('printing type of mu_age after pm.Deterministic')
         print(type(mu_age))
         print(mu_age)
-        
-        return mu_age
+    
+    # Always return mu_age, regardless of smoothing
+    return mu_age

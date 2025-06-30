@@ -258,7 +258,7 @@ def build_alpha(
     return alpha, const_alpha_sigma, alpha_potentials
 
 
-def mean_covariate_model(mu: at.TensorVariable) -> at.TensorVariable:
+def mean_covariate_model(mu: at.TensorVariable, use_lb_data: bool = False):
     """
     공변량(고정효과)과 랜덤효과를 포함한 예측 변수(pi)를 생성하는 함수
 
@@ -289,6 +289,12 @@ def mean_covariate_model(mu: at.TensorVariable) -> at.TensorVariable:
     zero_re = pm_model.shared_data["zero_re"]
     region_id_graph = pm_model.shared_data["region_id_graph"]
     output_template = pm_model.shared_data["output_template"]
+
+    if use_lb_data:
+        data_type = f'lb_{data_type}'
+        lb_data = pm_model.shared_data["lb_data"]
+        input_data = lb_data
+
 
     # --- 1) 랜덤 효과 행렬 생성 및 shift 벡터 계산 ---
     U, U_shift = build_random_effects_matrix(input_data, region_id_graph, root_area_id, parameters)
@@ -389,7 +395,7 @@ def mean_covariate_model(mu: at.TensorVariable) -> at.TensorVariable:
         mu * pm.math.exp(rand_term + fix_term)
     )
 
-    return pi
+    return pi, X_shift, beta, U, alpha
     # 결과 dict 반환
     # return {
     #     'pi': pi,
@@ -409,6 +415,7 @@ def mean_covariate_model(mu: at.TensorVariable) -> at.TensorVariable:
 def dispersion_covariate_model(
     delta_lb: float,
     delta_ub: float,
+    use_lb_data: bool = False,
 ) -> Dict[str, Any]:
     """
     Generate dispersion (delta) covariate model in PyMC 5.3 style.
@@ -437,6 +444,10 @@ def dispersion_covariate_model(
     data_type = pm_model.shared_data["data_type"]
     input_data = pm_model.shared_data["data"]
 
+    if use_lb_data:
+        data_type = f'lb_{data_type}'
+        lb_data = pm_model.shared_data["lb_data"]
+        input_data = lb_data
 
     # ─── 1) log(delta)의 하한/상한 계산 ──────────────────────────────────────
     lower = np.log(delta_lb)

@@ -157,18 +157,18 @@ def neg_binom(
     assert np.all(p >= 0), "observed values must be non‐negative"
     assert np.all(n >= 0), "effective sample size must be non‐negative"
 
-    # 4) “비율 * 표본크기” → 정수 카운트로 변환
+    # 4) "비율 * 표본크기" → 정수 카운트로 변환
     obs_counts = np.round(p * n).astype(int)  
     n_int      = n.copy()                    
 
     # 5) 표본 크기가 0보다 큰 인덱스를 미리 구한다
     nonzero_idx = np.where(n_int > 0)[0]     
 
-    # 6) TensorVariable 형태로 “mu_obs_all” 계산
+    # 6) TensorVariable 형태로 "mu_obs_all" 계산
     mu_obs_all = pi * n_int + 1e-9            
     alpha_all  = delta                        
 
-    # 7) “표본크기>0” 부분만 뽑아낸다
+    # 7) "표본크기>0" 부분만 뽑아낸다
     mu_obs = at.take(mu_obs_all, nonzero_idx)           
     if hasattr(alpha_all, "shape"):
         alpha_obs = at.take(alpha_all, nonzero_idx)
@@ -193,7 +193,7 @@ def neg_binom(
     )
 
 
-def neg_binom_lower_bound(name, pi, delta, p, n):
+def neg_binom_lower_bound(pi, delta):
     """
     Generate PyMC objects for a negative binomial lower bound model
 
@@ -208,11 +208,28 @@ def neg_binom_lower_bound(name, pi, delta, p, n):
     Returns
     -------
     dict with keys:
-      - p_obs: potential log-likelihood enforcing lower bound
+        - p_obs: potential log-likelihood enforcing lower bound
     """
-    assert pm.modelcontext(None) is not None, 'neg_binom_lower_bound() must be called within a PyMC model'
+
+    # --------------------------- 1) initialize pm_model ---------------------------   
+    pm_model = pm.modelcontext(None) # at reforged_mr/model/likelihood/neg_binom_lower_bound()
+
+
+    # --------------------------- 2) extract shared data ---------------------------   
+    data_type = pm_model.shared_data["data_type"]
+    data_type = f'lb_{data_type}'
+
+    lb_data = pm_model.shared_data["lb_data"]
+    p = lb_data['value'].to_numpy()
+    n = lb_data['effective_sample_size'].to_numpy().astype(int)
+
+
+    # 3) NumPy 형태로 변환 및 유효성 검사
+    p = np.asarray(p)
+    n = np.asarray(n, dtype=int)
     assert np.all(p >= 0), 'observed values must be non-negative'
     assert np.all(n > 0), 'effective sample size must be positive'
+
 
     # Convert to integer counts
     obs_counts = np.round(p * n).astype(int)
@@ -227,9 +244,7 @@ def neg_binom_lower_bound(name, pi, delta, p, n):
     dist = pm.NegativeBinomial.dist(mu=mu, alpha=delta)
     # sum logp over observations
     logp = dist.logp(counts_lb)
-    p_obs = pm.Potential(f'p_obs_{name}', pm.math.sum(logp))
-
-    return {'p_obs': p_obs}
+    p_obs = pm.Potential(f'p_obs_{data_type}', pm.math.sum(logp))
 
 
 # beta_binom은 수동으로 구현한 것, beta_binom_2는 pymc 내장 함수로 구현한 것
@@ -274,17 +289,37 @@ def beta_binom(pi, delta) -> None:
     obs_counts = np.round(p * n).astype(int)
     n_int = n.astype(int)
 
+    # Create mask for non-zero sample sizes
     mask = n_int > 0
+    
     # Parameterize BetaBinomial with alpha, beta
     alpha_param = pi * delta * 50
     beta_param = (1 - pi) * delta * 50
 
+    # Use PyTensor indexing for tensors
+    import pytensor.tensor as at
+    
+    # Get masked versions of the parameters
+    n_masked = n_int[mask]
+    obs_counts_masked = obs_counts[mask]
+    
+    # For PyTensor tensors, we need to use at.take with boolean mask
+    if hasattr(alpha_param, 'shape'):
+        # Convert boolean mask to indices
+        mask_indices = np.where(mask)[0]
+        alpha_masked = at.take(alpha_param, mask_indices)
+        beta_masked = at.take(beta_param, mask_indices)
+    else:
+        # If they're scalars, use them as is
+        alpha_masked = alpha_param
+        beta_masked = beta_param
+
     p_obs = pm.BetaBinomial(
         name=f'p_obs_{data_type}',
-        n=n_int[mask],
-        alpha=alpha_param[mask] if hasattr(alpha_param, 'shape') else alpha_param,
-        beta=beta_param[mask] if hasattr(beta_param, 'shape') else beta_param,
-        observed=obs_counts[mask]
+        n=n_masked,
+        alpha=alpha_masked,
+        beta=beta_masked,
+        observed=obs_counts_masked
     )
 
     # Posterior predictive counts: replace zero-sample cases

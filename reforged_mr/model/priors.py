@@ -111,22 +111,20 @@ def level_constraints(unconstrained_mu_age: at.TensorVariable) -> None:
 
 
 
-def covariate_level_constraints(
-    data_type: str,
-    # model: dismod_mr.data.MRModel,
-    vars: dict[str, any],
-    ages: np.ndarray
-) -> dict:
+def covariate_level_constraints(X_shift, beta, U, alpha, mu_age) -> at.TensorVariable:
     """
     Enforce level‐bounds on the covariate‐adjusted rate curve.
     If bounds['lower'] == 0, we skip the lower‐bound term entirely.
     """
 
-    # 1) Must be inside a `with pm.Model():` context
-    if pm.modelcontext(None) is None:
-        raise AssertionError('covariate_level_constraints must be called within a PyMC model')
+    # --------------------------- 1) initialize pm_model ---------------------------   
+    pm_model = pm.modelcontext(None) # at reforged_mr/model/priors/covariate_level_constraints()
 
-    params = model.parameters.get(data_type, {})
+
+    # --------------------------- 2) extract shared data ---------------------------   
+    data_type = pm_model.shared_data["data_type"]
+    region_id_graph = pm_model.shared_data["region_id_graph"]
+    params = pm_model.shared_data["params_of_data_type"]
     lvl    = params.get('level_value')
     bounds = params.get('level_bounds')
     if not lvl or not bounds:
@@ -134,19 +132,17 @@ def covariate_level_constraints(
         return {}
 
     # 2) Compute sex covariate range (after centering)
-    X_shift = vars['X_shift']
-    beta    = vars['beta']
     sex_idx = list(X_shift.index).index('x_sex')
     X_sex_max = 0.5 - X_shift['x_sex']
     X_sex_min = -0.5 - X_shift['x_sex']
 
     # 3) Build “layers” of U‐masks for the random‐effects hierarchy
-    U         = vars['U']  # pandas.DataFrame
-    hierarchy = model.hierarchy
     layers: list[np.ndarray] = []
-    nodes = ['Global']
+
+    global_id = 1 # TODO: make it a parameter later 
+    nodes = [global_id]
     for _ in range(3):
-        nodes = [c for n in nodes for c in hierarchy.successors(n)]
+        nodes = [c for n in nodes for c in region_id_graph.successors(n)]
         mask = np.array([col in nodes for col in U.columns], dtype=bool)
         if mask.any():
             layers.append(mask)
@@ -163,7 +159,7 @@ def covariate_level_constraints(
     high = np.log(bounds['upper'])
 
     # 5) Inside the PyMC model, build the potential:
-    mu = vars['mu_age']  # (TensorVariable, shape=(len(ages),))
+    mu = mu_age  # (TensorVariable, shape=(len(ages),))
 
     # (a) log(mu) at each age
     log_vals = at.log(mu)
@@ -173,7 +169,11 @@ def covariate_level_constraints(
     log_min = at.min(log_vals)
 
     # (c) add random‐effect contributions, if any
-    alpha_list = vars.get('alpha', [])
+    if alpha is None:
+        alpha_list = []
+    else:
+        alpha_list = alpha
+
     if len(alpha_list) > 0:
         alphas = at.stack(alpha_list)  # shape=(n_re,)
         for m in layers:
@@ -213,8 +213,8 @@ def covariate_level_constraints(
     logp_sum  = at.sum(logp_vals)
 
     # (h) register as a single Potential
-    pot = pm.Potential(f"covariate_constraint_{data_type}", var=logp_sum)
-    return {"covariate_constraint": pot}
+    covariate_constraint = pm.Potential(f"covariate_constraint_{data_type}", var=logp_sum)
+    return covariate_constraint
 
 
 def derivative_constraints(mu_age: at.TensorVariable) -> at.TensorVariable:
