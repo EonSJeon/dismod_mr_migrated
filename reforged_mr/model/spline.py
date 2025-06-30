@@ -50,7 +50,7 @@ def build_weight_matrix_linear(knots: np.ndarray, ages: np.ndarray) -> np.ndarra
 
 
 # [Main Function]: define spline variables
-def spline() -> None:
+def spline() -> at.TensorVariable:
     """
     첨부된 수식
         h(a) = sum_{k=1..K-1} 1[a_k <= a < a_{k+1}] (
@@ -63,7 +63,7 @@ def spline() -> None:
     을 그대로 반영한 spline 함수입니다.
     """
     # --------------------------- 1) initialize pm_model ---------------------------   
-    pm_model = pm.modelcontext(None) # at reforged_mr/model/spline.py
+    pm_model = pm.modelcontext(None) # at reforged_mr/model/spline/spline()
 
 
     # --------------------------- 2) extract shared data ---------------------------   
@@ -100,14 +100,37 @@ def spline() -> None:
         )
         for i in range(K)
     ]
+
+    print('printing type of gamma')
+    print(type(gamma))
+    print(gamma)
+
     gamma_vec = at.stack(gamma)  # shape=(K,)
+
+    print('printing type of gamma_vec')
+    print(type(gamma_vec))
+    print(gamma_vec)
+
     exp_gamma = at.exp(gamma_vec)  # shape=(K,), 양수
+
+    print('printing type of exp_gamma')
+    print(type(exp_gamma))
+    print(exp_gamma)
 
     # 5-2) W_numpy를 PyTensor 상수(Constant)로 변환
     W_t = at.constant(W_numpy)  # shape=(len(ages), K)
 
+    print('printing type of W_t')
+    print(type(W_t))
+    print(W_t)
+
     # 5-3) mu_age 계산: W @ exp_gamma
     mu_age = at.dot(W_t, exp_gamma)  # shape=(len(ages),)
+
+    print('printing type of mu_age before pm.Deterministic')
+    print(type(mu_age))
+    print(mu_age)
+
     pm.Deterministic(f"mu_age_{data_type}", mu_age)
 
     # 5-4) ||h'|| ~ Normal(0, σ^2) smoothing 페널티
@@ -143,3 +166,9 @@ def spline() -> None:
         # 6) 이제 로그우도에 바로 분산(σ^2) 사용
         #    -0.5 * (sum_term) / (σ^2)
         pm.Potential(f"smooth_{data_type}", -0.5 * sum_term / (smoothing**2))
+
+        print('printing type of mu_age after pm.Deterministic')
+        print(type(mu_age))
+        print(mu_age)
+        
+        return mu_age
