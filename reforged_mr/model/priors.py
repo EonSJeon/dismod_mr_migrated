@@ -5,7 +5,7 @@ import pytensor.tensor as at
 
 def similar(
     mu_child: at.TensorVariable,
-    mu_parent: at.TensorVariable,
+    mu_parent, # at.TensorVariable or numeric array
     sigma_parent: float,
     sigma_difference: float,
     offset: float = 1e-9
@@ -217,20 +217,7 @@ def covariate_level_constraints(
     return {"covariate_constraint": pot}
 
 
-
-
-
-
-
-
-
-
-def derivative_constraints(
-    data_type: str,
-    parameters: dict,
-    mu_age: at.TensorVariable,
-    ages: np.ndarray
-) -> dict:
+def derivative_constraints(mu_age: at.TensorVariable) -> at.TensorVariable:
     """
     Implement priors on the derivative of mu_age over specified age intervals,
     using PyMC 5.3 양식에 맞춰 수정한 버전입니다.
@@ -238,7 +225,17 @@ def derivative_constraints(
     parameters 에 'increasing'과 'decreasing'이 반드시 있어야 하며,
     해당 구간에서 기울기 위반(penalty)을 계산해 pm.Potential 으로 추가합니다.
     """
-    assert pm.modelcontext(None) is not None, 'derivative_constraints must be called within a PyMC model'
+
+    # --------------------------- 1) initialize pm_model ---------------------------   
+    pm_model = pm.modelcontext(None) # at reforged_mr/model/priors/level_constraints()
+
+
+    # --------------------------- 2) extract shared data ---------------------------   
+    data_type = pm_model.shared_data["data_type"]
+    ages = pm_model.shared_data["ages"]
+    parameters = pm_model.shared_data["params_of_data_type"]
+
+
     inc = parameters.get("increasing")
     dec = parameters.get("decreasing")
     if not inc or not dec:
@@ -274,9 +271,9 @@ def derivative_constraints(
     logp = -1e12 * penalty
 
     # 1-5) pm.Potential 을 명시적으로 생성
-    pot = pm.Potential(
+    mu_age_derivative_potential = pm.Potential(
         name=f"mu_age_derivative_potential_{data_type}",
         var=logp
     )
 
-    return {"mu_age_derivative_potential": pot}
+    return mu_age_derivative_potential
