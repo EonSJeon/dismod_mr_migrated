@@ -4,6 +4,9 @@ import pytensor.tensor as at
 
 # TODO: scipy.interpolate.interp1d에 comparable하게 여러 옵션 추가 
 # i.e. quadratic, cubic, etc. 
+
+
+# [Helper Function]: build weight matrix for linear interpolation
 def build_weight_matrix_linear(knots: np.ndarray, ages: np.ndarray) -> np.ndarray:
     """
     1차 선형 보간(linear interpolation)을 위한 weight 행렬 W를 사전 계산.
@@ -19,7 +22,7 @@ def build_weight_matrix_linear(knots: np.ndarray, ages: np.ndarray) -> np.ndarra
         j_minus = j_plus - 1
 
         # (1) age == 마지막 knot인 경우 → W[i, K-1] = 1
-        if j_plus == K and a == knots[-1]:
+        if j_plus == K and np.isclose(a, knots[-1]):
             W[i, K - 1] = 1.0
             continue
 
@@ -45,28 +48,34 @@ def build_weight_matrix_linear(knots: np.ndarray, ages: np.ndarray) -> np.ndarra
     return W
 
 
-def spline(
-    data_type: str,
-    ages: np.ndarray,
-    knots: np.ndarray,
-    smoothing: float,  # σ (||h'|| ~ Normal(0, σ^2))
-    interpolation_method: str = "linear",
-) -> dict:
+
+# [Main Function]: define spline variables
+def spline() -> None:
     """
     첨부된 수식
-      h(a) = sum_{k=1..K-1} 1[a_k <= a < a_{k+1}] (
+        h(a) = sum_{k=1..K-1} 1[a_k <= a < a_{k+1}] (
                 (a - a_k)/(a_{k+1}-a_k) * e^{γ_k} +
                 (a_{k+1} - a)/(a_{k+1}-a_k) * e^{γ_{k+1}}
-              )
+            )
     γ_k ~ Normal(0, 10^2),
     ||h'|| ~ Normal(0, σ^2)
 
     을 그대로 반영한 spline 함수입니다.
     """
-    assert pm.modelcontext(None) is not None, (
-        "spline must be called within a PyMC model"
-    )
-    # --- 1) 입력 검증 및 배열 변환 ---
+    # --------------------------- 1) initialize pm_model ---------------------------   
+    pm_model = pm.modelcontext(None) # at reforged_mr/model/spline.py
+
+
+    # --------------------------- 2) extract shared data ---------------------------   
+    data_type = pm_model.shared_data["data_type"]
+    knots = pm_model.shared_data["knots"]
+    K = len(knots)  # K: number of knots 
+    ages = pm_model.shared_data["ages"]
+    smoothing = pm_model.shared_data["smoothing"]
+    interpolation_method = pm_model.shared_data["interpolation_method"]
+    
+
+    # --------------------------- 3) validate shared data ---------------------------   
     if interpolation_method != "linear":
         raise ValueError(
             "이 spline 구현은 'linear' 보간만 지원합니다. "
@@ -75,15 +84,13 @@ def spline(
     if not np.all(np.diff(knots) > 0):
         raise ValueError("Spline knots must be strictly increasing.")
 
-    # --- 3) W 행렬을 미리 계산 (NumPy) ---
+
+    # --------------------------- 4) calculate weight matrix ---------------------------   
     W_numpy = build_weight_matrix_linear(knots, ages)
 
-    # --- 4) PyMC 모델 문맥 안에서 spline 변수 정의 ---
 
-    K = len(knots)  # knot 개수
-
-    # ────────────────────────────────────────────────────────────────
-    # 4-1) γ_k ~ Normal(0, 10^2) prior
+    # --------------------------- 5) define spline variables ---------------------------   
+    # 5-1) γ_k ~ Normal(0, 10^2) prior
     gamma = [
         pm.Normal(
             f"gamma_{data_type}_{i}",
@@ -96,21 +103,21 @@ def spline(
     gamma_vec = at.stack(gamma)  # shape=(K,)
     exp_gamma = at.exp(gamma_vec)  # shape=(K,), 양수
 
-    # ────────────────────────────────────────────────────────────────
-    # 4-2) W_numpy를 PyTensor 상수(Constant)로 변환
+    # 5-2) W_numpy를 PyTensor 상수(Constant)로 변환
     W_t = at.constant(W_numpy)  # shape=(len(ages), K)
 
-    # 4-3) mu_age 계산: W @ exp_gamma
+    # 5-3) mu_age 계산: W @ exp_gamma
     mu_age = at.dot(W_t, exp_gamma)  # shape=(len(ages),)
     pm.Deterministic(f"mu_age_{data_type}", mu_age)
 
-    # ────────────────────────────────────────────────────────────────
-    # 4-4) ||h'|| ~ Normal(0, σ^2) smoothing 페널티
+    # 5-4) ||h'|| ~ Normal(0, σ^2) smoothing 페널티
     #     수식:
     #       γ_min = log( (∑_{i=0..K-1} exp(γ_i) / 10) / K )
     #       ||h'|| = sqrt( ∑_{k=0..K-2} [ max(γ_k,γ_min) - max(γ_{k+1},γ_min) ]^2
     #                        / [ (knots[k+1] - knots[k]) * (knots[K-1] - knots[0]) ] )
-    #
+
+
+    # --------------------------- 6) define smoothing penalty ---------------------------   
     if (smoothing is not None) and (smoothing > 0) and np.isfinite(smoothing):
         # 1) γ_min 계산
         mean_term = at.sum(exp_gamma) / 10.0  # ∑ exp(γ_i) / 10
@@ -136,8 +143,3 @@ def spline(
         # 6) 이제 로그우도에 바로 분산(σ^2) 사용
         #    -0.5 * (sum_term) / (σ^2)
         pm.Potential(f"smooth_{data_type}", -0.5 * sum_term / (smoothing**2))
-
-    # --- 5) 결과 반환 ---
-    return {"mu_age": mu_age, "gamma": gamma}
-
-### CAN WE JUST RETURN NOTHING AND STORE IT IN PM.MODEL()?
