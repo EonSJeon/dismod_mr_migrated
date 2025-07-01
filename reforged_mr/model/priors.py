@@ -50,8 +50,9 @@ def level_constraints(unconstrained_mu_age: at.TensorVariable):
     # piecewise: val before start, raw in [start,end], val after end
     clipped = at.switch(idx < start, val,
                 at.switch(idx > end, val, unconstrained_mu_age))
-    constrained_mu_age = at.clip(clipped, lb, ub)
-    constrained_mu_age = pm.Deterministic(name=f"constrained_mu_age_{label}", var=constrained_mu_age)
+    
+    model.add_coord("age", ages)
+    constrained_mu_age = pm.Deterministic(name=f"constrained_mu_age_{label}", var=at.clip(clipped, lb, ub), dims=("age",))
     # add similarity potential back to the raw curve
     similar(
         child_curve      = constrained_mu_age,

@@ -42,13 +42,13 @@ def spline() -> at.TensorVariable:
         raise ValueError("Knots must be strictly increasing")
 
     W = at.constant(build_W_linear(knots, ages))
+    
     model.add_coord("knot", knots)
-
-    gamma   = pm.Normal(f"gamma_{dt}", mu=0, sigma=10, dims="knot")
+    gamma   = pm.Normal(f"gamma_{dt}", mu=0, sigma=10, dims=("knot",))
     heights = at.exp(gamma)
 
-    mu_age = at.dot(W, heights)
-    mu_age = pm.Deterministic(name=f"mu_age_{dt}", var=mu_age)
+    model.add_coord("age", ages)
+    mu_age = pm.Deterministic(name=f"mu_age_{dt}", var=at.dot(W, heights), dims=("age",))
 
     if smooth and np.isfinite(smooth):
         gamma_min = at.log(at.sum(heights) / 10 / knots.size)
