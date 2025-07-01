@@ -48,7 +48,7 @@ def spline() -> at.TensorVariable:
     heights = at.exp(gamma)
 
     mu_age = at.dot(W, heights)
-    pm.Deterministic(f"mu_age_{dt}", mu_age)
+    mu_age = pm.Deterministic(name=f"mu_age_{dt}", var=mu_age)
 
     if smooth and np.isfinite(smooth):
         gamma_min = at.log(at.sum(heights) / 10 / knots.size)
