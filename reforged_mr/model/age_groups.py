@@ -5,83 +5,44 @@ import warnings
 import networkx as nx
 from typing import Dict, List, Tuple, Any
 import pytensor.tensor as at   # ← import cumsum, etc.
-import pytensor   # 추가된 import
 
-# ------------------------------
-# Age integrating models
-# ------------------------------
+
 def age_standardize_approx(mu_age: at.TensorVariable, use_lb_data: bool = False) -> at.TensorVariable:
     """
-    Approximate interval average of mu_age over [age_start, age_end] with weights.
-    Returns dict with 'mu_interval' deterministic.
+    Approximate the interval average of mu_age over [age_start, age_end] using precomputed age_weights.
     """
+    model = pm.modelcontext(None)
+    dt    = model.shared_data["data_type"]
+    ages  = model.shared_data["ages"]
+    w     = model.shared_data["age_weights"]
+    df    = model.shared_data["lb_data"] if use_lb_data else model.shared_data["data"]
 
-    # --------------------------- 1) initialize pm_model ---------------------------   
-    pm_model = pm.modelcontext(None) # at reforged_mr/model/age_groups/age_standardize_approx()
+    # align weight vector to the age grid
+    if w.size != ages.size:
+        w = w[:ages.size] if w.size > ages.size else np.pad(w, (0, ages.size - w.size), constant_values=0)
 
+    # compute integer indices into the age grid
+    start_idx_np = (df["age_start"].clip(ages[0], ages[-1]) - ages[0]).astype(int)
+    end_idx_np   = (df["age_end"]  .clip(ages[0], ages[-1]) - ages[0]).astype(int)
+    start_idx = at.constant(start_idx_np)
+    end_idx   = at.constant(end_idx_np)
 
-    # --------------------------- 2) extract shared data ---------------------------   
-    data_type = pm_model.shared_data["data_type"]
-    ages = pm_model.shared_data["ages"]
-    age_weights = pm_model.shared_data["age_weights"]
-    data = pm_model.shared_data["data"]
+    # cumulative sums for numerator and denominator
+    cum_w  = at.constant(np.cumsum(w))
+    cum_mu = pm.Deterministic(f"cum_sum_mu_{dt}", at.cumsum(mu_age * w))
 
-    age_start = data["age_start"]
-    age_end = data["age_end"]
+    # extract interval sums and weights
+    interval_sum = at.take(cum_mu, end_idx) - at.take(cum_mu, start_idx)
+    interval_wt  = at.take(cum_w,  end_idx) - at.take(cum_w,  start_idx)
 
-    if use_lb_data:
-        data_type = f'lb_{data_type}'
-
-        lb_data = pm_model.shared_data["lb_data"]
-        age_start = lb_data["age_start"]
-        age_end = lb_data["age_end"]
-
-
-    # 1) cumulative weights (NumPy) - ensure age_weights has same length as ages
-    if len(age_weights) != len(ages):
-        # Truncate or pad age_weights to match ages length
-        if len(age_weights) > len(ages):
-            age_weights = age_weights[:len(ages)]
-        else:
-            # Pad with zeros if age_weights is shorter
-            age_weights = np.pad(age_weights, (0, len(ages) - len(age_weights)), 'constant')
-    
-    cum_wt_np = np.cumsum(age_weights)
-
-    # 2) clip and convert age_start/age_end to integer indices into 'ages'
-    start_idx_np = (age_start.clip(ages[0], ages[-1]) - ages[0]).astype(int)
-    end_idx_np   = (age_end.clip(ages[0], ages[-1])   - ages[0]).astype(int)
-
-    # 3) build PyTensor constants for those indices and cumulative weights
-    start_idx_tt = at.constant(start_idx_np)
-    end_idx_tt   = at.constant(end_idx_np)
-    cum_wt_tt    = at.constant(cum_wt_np)
-
-    # 4) build cumulative weighted mu on the PyTensor side
-    cum_mu = pm.Deterministic(
-        f"cum_sum_mu_{data_type}",
-        at.cumsum(mu_age * age_weights)
+    # compute weighted average, fallback to point value if start==end
+    avg = at.switch(
+        at.eq(start_idx, end_idx),
+        at.take(mu_age, start_idx),
+        interval_sum / interval_wt
     )
 
-    # 5) extract cum_mu at start and end indices via at.take
-    cum_mu_start = at.take(cum_mu, start_idx_tt)
-    cum_mu_end   = at.take(cum_mu, end_idx_tt)
-
-    # 6) compute interval sum and interval total weight
-    interval_sum  = cum_mu_end - cum_mu_start
-    interval_wt   = at.take(cum_wt_tt, end_idx_tt) - at.take(cum_wt_tt, start_idx_tt)
-
-    # 7) naive interval mean (PyTensor)
-    vals = interval_sum / interval_wt
-
-    # 8) handle zero-length intervals (where start_idx == end_idx)
-    eq_mask       = at.eq(start_idx_tt, end_idx_tt)
-    mu_at_start   = at.take(mu_age, start_idx_tt)
-    vals_fixed    = at.switch(eq_mask, mu_at_start, vals)
-
-    # 9) make the result a Deterministic
-    mu_interval = pm.Deterministic(f"mu_interval_{data_type}", vals_fixed)
-
+    mu_interval = pm.Deterministic(name=f"mu_interval_{dt}", var=avg)
     return mu_interval
 
 
