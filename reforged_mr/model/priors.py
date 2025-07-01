@@ -3,112 +3,99 @@ import pymc as pm
 import pytensor.tensor as at
 
 
-def similar(
-    mu_child: at.TensorVariable,
-    mu_parent, # at.TensorVariable or numeric array
-    sigma_parent: float,
-    sigma_difference: float,
-    offset: float = 1e-9
-) -> at.TensorVariable:
+def similar(child_curve, parent_curve, sigma_parent, sigma_diff, eps=1e-9, penalty_name=""):
     """
-    Encode a similarity prior: child mu should be close to parent mu on log scale.
-    PyMC 5.3 기준으로 dist.logp() 대신 pm.logp(dist, x) 사용.
+    Softly shrink child_curve toward parent_curve on the log scale.
     """
-    # --------------------------- 1) initialize pm_model ---------------------------   
-    pm_model = pm.modelcontext(None) # at reforged_mr/model/priors/similar()
-
-
-    # --------------------------- 2) extract shared data ---------------------------   
-    data_type = pm_model.shared_data["data_type"]
-    
-
-    # 1) tau 계산
-    if hasattr(mu_parent, "distribution"):
-        # mu_parent가 PyMC RV일 때
-        tau = 1.0 / (sigma_parent**2 + sigma_difference**2)
+    model      = pm.modelcontext(None) # reforged_mr - similar()
+    label      = model.shared_data["data_type"]
+    # determine precision τ
+    if hasattr(parent_curve, "distribution"):
+        tau = 1/(sigma_parent**2 + sigma_diff**2)
     else:
-        # mu_parent가 numeric array일 때
-        denom = ((sigma_parent + offset) / (mu_parent + offset))**2 + sigma_difference**2
-        tau = 1.0 / denom
-
-    # 2) log-transform with clipping
-    log_child  = pm.math.log(pm.math.clip(mu_child, offset, np.inf))
-    log_parent = pm.math.log(pm.math.clip(mu_parent, offset, np.inf))
-
-    # 3) Pointwise log‐probabilities: pm.logp(dist, log_child)
-    dist = pm.Normal.dist(mu=log_parent, sigma=1 / pm.math.sqrt(tau))
-    logp = pm.logp(dist, log_child)  # ← 여기서 dist.logp(log_child) 대신
-
-    # 4) Potential 등록
-    parent_similarity = pm.Potential(
-        name=f"parent_similarity_{data_type}",
-        var=pm.math.sum(logp)
+        tau = 1/(((sigma_parent + eps)/(parent_curve + eps))**2 + sigma_diff**2)
+    # log‐values, clipped to avoid log(0)
+    log_child  = at.log(pm.math.clip(child_curve,  eps, np.inf))
+    log_parent = at.log(pm.math.clip(parent_curve, eps, np.inf))
+    # elementwise log-density, then sum into one potential
+    lp = pm.logp(
+        pm.Normal.dist(mu=log_parent, sigma=1/pm.math.sqrt(tau)),
+        log_child
     )
+    pm.Potential(f"parent_similarity_{label}{penalty_name}", pm.math.sum(lp))
 
-    return parent_similarity
 
-
-def level_constraints(unconstrained_mu_age: at.TensorVariable) -> None:
+def level_constraints(unconstrained_mu_age: at.TensorVariable):
     """
-    PyMC 5.3 양식에 맞춘 level_constraints 구현 예시입니다.
-    - unconstrained_mu_age: 이미 모델 컨텍스트 안에서 생성된 TensorVariable이어야 합니다.
-    - ages: NumPy 배열 ([0,1,2,...]).
+    Hard-clip unconstrained_mu_age outside [before, after] to a fixed value,
+    then softly penalize deviation from the original in between.
     """
-    
-    # --------------------------- 1) initialize pm_model ---------------------------   
-    pm_model = pm.modelcontext(None) # at reforged_mr/model/priors/level_constraints()
+    model      = pm.modelcontext(None) # reforged_mr - level_constraints()
+    label      = model.shared_data["data_type"]
+    ages       = model.shared_data["ages"]
+    params     = model.shared_data["params_of_data_type"]
+    # exit if no level constraints provided
+    if not ("level_value" in params and "level_bounds" in params):
+        return unconstrained_mu_age, unconstrained_mu_age, None
+
+    lv   = params["level_value"]
+    lb   = params["level_bounds"]["lower"]
+    ub   = params["level_bounds"]["upper"]
+    # map ages to indices
+    start = int(np.clip(lv["age_before"] - ages[0], 0, ages.size))
+    end   = int(np.clip(lv["age_after"]  - ages[0], 0, ages.size))
+    idx   = at.arange(ages.size)
+    val   = float(lv["value"])
+
+    # piecewise: val before start, raw in [start,end], val after end
+    clipped = at.switch(idx < start, val,
+                at.switch(idx > end, val, unconstrained_mu_age))
+    constrained_mu_age = at.clip(clipped, lb, ub)
+    pm.Deterministic(f"constrained_mu_age_{label}", constrained_mu_age)
+
+    # add similarity potential back to the raw curve
+    sim = similar(
+        child_curve      = constrained_mu_age,
+        parent_curve     = unconstrained_mu_age,
+        sigma_parent     = 0.0,
+        sigma_diff       = 0.01,
+        eps              = 1e-6,
+        penalty_name     = "_level_constraints"
+    )
+    return constrained_mu_age
 
 
-    # --------------------------- 2) extract shared data ---------------------------   
-    data_type = pm_model.shared_data["data_type"]
-    ages = pm_model.shared_data["ages"]
-    parameters = pm_model.shared_data["params_of_data_type"]
-
-
-    # --------------------------- 4) validate shared data ---------------------------   
-    if "level_value" not in parameters or "level_bounds" not in parameters:
+def derivative_constraints(mu_age: at.TensorVariable):
+    """
+    Enforce monotonicity by heavily penalizing negative (or positive)
+    finite-differences on specified age-ranges.
+    """
+    model      = pm.modelcontext(None) # reforged_mr - derivative_constraints()
+    ages       = model.shared_data["ages"]
+    params     = model.shared_data["params_of_data_type"]
+    inc, dec   = params.get("increasing"), params.get("decreasing")
+    if not (inc and dec):
         return {}
 
+    # helper to turn an age into a safe diff-index
+    def to_idx(age_val):
+        idx = age_val - ages[0]
+        return int(np.clip(idx, 0, len(ages) - 1))
 
-    lv = parameters["level_value"]
-    lb = parameters["level_bounds"]["lower"]
-    ub = parameters["level_bounds"]["upper"]
+    i0, i1 = to_idx(inc["age_start"]), to_idx(inc["age_end"])
+    d0, d1 = to_idx(dec["age_start"]), to_idx(dec["age_end"])
 
+    diff = at.diff(mu_age)
+    inc_viol = at.sum(at.clip(diff[i0:i1], -np.inf,   0.0))
+    dec_viol = at.sum(at.clip(diff[d0:d1],   0.0, np.inf))
 
-    # 1) NumPy 단계에서 정수 인덱스 계산
-    before_idx = int(np.clip(lv["age_before"] - ages[0], 0, len(ages)))
-    after_idx  = int(np.clip(lv["age_after"]  - ages[0], 0, len(ages)))
-    i = at.arange(len(ages))  # PyTensor TensorVariable
+    penalty = inc_viol**2 + dec_viol**2
+    logp    = -1e12 * penalty
 
-
-    # 2) val, lb, ub 를 float으로 변환
-    val_f = float(lv["value"])
-    lb_f  = float(lb)
-    ub_f  = float(ub)
-
-
-    # 3) piecewise‐constant + clipping (PyTensor 연산)
-    # with pm.modelcontext(None):  # 이미 상위 코드가 `with pm.Model():` 내부라면, pm.Potential 등이 모델에 등록됩니다
-    seg1 = at.switch(i < before_idx, val_f, unconstrained_mu_age)
-    seg2 = at.switch(i >  after_idx,  val_f, seg1)
-    clipped = at.clip(seg2, lb_f, ub_f)
-
-
-    # 4) TensorVariable → Deterministic
-    constrained_mu_age = pm.Deterministic(f"value_constrained_mu_age_{data_type}", clipped)
-
-
-    # 5) similarity prior 걸기 (위의 similar 함수를 이용)
-    parent_similarity = similar(
-        mu_child         = constrained_mu_age,
-        mu_parent        = unconstrained_mu_age,
-        sigma_parent     = 0.0,
-        sigma_difference = 0.01,
-        offset           = 1e-6
+    pm.Potential(
+        name=f"mu_age_derivative_potential_{model.shared_data['data_type']}",
+        var=logp
     )
-
-    return constrained_mu_age, unconstrained_mu_age, parent_similarity
-
 
 
 def covariate_level_constraints(X_shift, beta, U, alpha, mu_age) -> at.TensorVariable:
@@ -215,65 +202,3 @@ def covariate_level_constraints(X_shift, beta, U, alpha, mu_age) -> at.TensorVar
     # (h) register as a single Potential
     covariate_constraint = pm.Potential(f"covariate_constraint_{data_type}", var=logp_sum)
     return covariate_constraint
-
-
-def derivative_constraints(mu_age: at.TensorVariable) -> at.TensorVariable:
-    """
-    Implement priors on the derivative of mu_age over specified age intervals,
-    using PyMC 5.3 양식에 맞춰 수정한 버전입니다.
-
-    parameters 에 'increasing'과 'decreasing'이 반드시 있어야 하며,
-    해당 구간에서 기울기 위반(penalty)을 계산해 pm.Potential 으로 추가합니다.
-    """
-
-    # --------------------------- 1) initialize pm_model ---------------------------   
-    pm_model = pm.modelcontext(None) # at reforged_mr/model/priors/level_constraints()
-
-
-    # --------------------------- 2) extract shared data ---------------------------   
-    data_type = pm_model.shared_data["data_type"]
-    ages = pm_model.shared_data["ages"]
-    parameters = pm_model.shared_data["params_of_data_type"]
-
-
-    inc = parameters.get("increasing")
-    dec = parameters.get("decreasing")
-    if not inc or not dec:
-        return {}
-
-    # 0) NumPy 단계에서 “증가해야 할 구간”과 “감소해야 할 구간”의 인덱스 계산
-    inc_start = int(np.clip(inc["age_start"] - ages[0], 0, len(ages) - 1))
-    inc_end   = int(np.clip(inc["age_end"]   - ages[0], 0, len(ages) - 1))
-    dec_start = int(np.clip(dec["age_start"] - ages[0], 0, len(ages) - 1))
-    dec_end   = int(np.clip(dec["age_end"]   - ages[0], 0, len(ages) - 1))
-
-    # 1) PyMC 모델 컨텍스트(이미 상위 코드에서 `with pm.Model():` 내부여야 함) 하에 연산
-    #
-    #    PyMC 5.3부터는 `@pm.Potential(...)` 데코레이터 방식이 아니라
-    #    “명시적으로 pm.Potential(name=..., var=...)” 형태로 써야 합니다.
-    #
-    #    여기에서는 “mu_age”가 전에 생성되어 있는 TensorVariable이라고 가정합니다.
-    #
-    
-    # 1-1) 연속 나이별 mu_age 간의 차분 (pytensor.at.diff)
-    mu_prime = at.diff(mu_age)  # shape = (len(ages)-1,)
-
-    # 1-2) “증가(increasing)” 구간에서 음수 기울기 위반합
-    inc_slice = mu_prime[inc_start:inc_end]  # 해당 슬라이스 구간
-    inc_violation = at.sum(at.clip(inc_slice, -np.inf, 0.0))
-
-    # 1-3) “감소(decreasing)” 구간에서 양수 기울기 위반합
-    dec_slice = mu_prime[dec_start:dec_end]
-    dec_violation = at.sum(at.clip(dec_slice, 0.0, np.inf))
-
-    # 1-4) 벌칙(penalty) 계산 (강하게 벌칙 주기 위해 제곱 후 *1e12)
-    penalty = inc_violation**2 + dec_violation**2
-    logp = -1e12 * penalty
-
-    # 1-5) pm.Potential 을 명시적으로 생성
-    mu_age_derivative_potential = pm.Potential(
-        name=f"mu_age_derivative_potential_{data_type}",
-        var=logp
-    )
-
-    return mu_age_derivative_potential
