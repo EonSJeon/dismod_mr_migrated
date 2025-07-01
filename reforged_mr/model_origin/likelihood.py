@@ -1,0 +1,594 @@
+import numpy as np
+import pymc as pm
+import pytensor.tensor as at
+
+
+def binom(pi) -> None:
+    """
+    Generate PyMC objects for a binomial model
+
+    Parameters
+    ----------
+    name : str
+    pi   : Tensor or array, success probability for each observation
+    p    : array, observed proportions
+    n    : array, effective sample sizes
+
+    Returns
+    -------
+    dict
+        - p_obs: observed Binomial RV
+        - p_pred: posterior predictive proportion (Deterministic)
+    """
+    # --------------------------- 1) initialize pm_model ---------------------------   
+    pm_model = pm.modelcontext(None) # at reforged_mr/model/likelihood/binom()
+
+
+    # --------------------------- 2) extract shared data ---------------------------   
+    data_type = pm_model.shared_data["data_type"]
+    data = pm_model.shared_data["data"]
+    p = data['value'].to_numpy(),
+    n = data['effective_sample_size'].to_numpy().astype(int)
+
+
+    # input validation
+    p = np.asarray(p)
+    n = np.asarray(n, dtype=int)
+    assert np.all(p >= 0), 'observed values must be non-negative'
+    assert np.all(n >= 0), 'effective sample size must non-negative'
+
+    # observed counts (rounded)
+    obs_counts = np.round(p * n).astype(int)
+    n_int = n.astype(int)
+
+    # observed likelihood
+    p_obs = pm.Binomial(
+        name=f'p_obs_{data_type}',
+        n=n_int,
+        p=pi + 1e-9,
+        observed=obs_counts
+    )
+
+    # adjust zero-sample cases for predictive validity
+    n_nonzero = n_int.copy()
+    n_nonzero[n_nonzero == 0] = int(1e6)
+
+    # latent predictive counts
+    p_count = pm.Binomial(
+        name=f'p_count_{data_type}',
+        n=n_nonzero,
+        p=pi + 1e-9
+    )
+    # convert to proportions
+    p_pred = pm.Deterministic(
+        name=f'p_pred_{data_type}',
+        var=p_count / n_nonzero
+    )
+
+
+def poisson(pi) -> None:
+    """
+    Generate PyMC objects for a Poisson model
+
+    Parameters
+    ----------
+    name : str
+    pi   : Tensor or array, expected rate per unit sample size
+    p    : array, observed rates
+    n    : array, sample sizes (to scale rates to counts)
+
+    Returns
+    -------
+    dict with keys:
+      - p_obs: observed Poisson RV
+      - p_pred: posterior predictive rate
+    """
+    
+    # --------------------------- 1) initialize pm_model ---------------------------   
+    pm_model = pm.modelcontext(None) # at reforged_mr/model/likelihood/poisson()
+
+
+    # --------------------------- 2) extract shared data ---------------------------   
+    data_type = pm_model.shared_data["data_type"]
+    data = pm_model.shared_data["data"]
+    p = data['value'].to_numpy(),
+    n = data['effective_sample_size'].to_numpy().astype(int)
+
+
+    # input validation
+    p = np.asarray(p)
+    n = np.asarray(n, dtype=int)
+    assert np.all(p >= 0), 'observed values must be non-negative'
+    assert np.all(n >= 0), 'effective sample size must be non-negative'
+
+    obs_counts = np.round(p * n).astype(int)
+    n_float = n.astype(float)
+
+    p_obs = pm.Poisson(
+        name=f'p_obs_{data_type}',
+        mu=pi * n_float,
+        observed=obs_counts
+    )
+
+    n_pred = n_float.copy()
+    n_pred[n_pred == 0] = 1e6
+    count_pred = pm.Poisson(
+        name=f'p_count_{data_type}',
+        mu=pi * n_pred
+    )
+    p_pred = pm.Deterministic(
+        name=f'p_pred_{data_type}',
+        var=count_pred / n_pred
+    )
+
+
+def neg_binom(
+    pi,               # TensorVariable 또는 array‐like
+    delta,            # TensorVariable 또는 스칼라
+) -> None:
+    """
+    PyMC 5.3용 negative‐binomial likelihood 함수
+
+    Returns
+    -------
+    dict with keys:
+      - p_obs : None (로그우도는 pm.Potential으로 걸림)
+      - p_pred: pm.Deterministic (posterior predictive 비율, shape=(N,))
+    """
+
+    # --------------------------- 1) initialize pm_model ---------------------------   
+    pm_model = pm.modelcontext(None) # at reforged_mr/model/likelihood/neg_binom()
+
+
+    # --------------------------- 2) extract shared data ---------------------------   
+    data_type = pm_model.shared_data["data_type"]
+    data = pm_model.shared_data["data"]
+    p = data['value'].to_numpy()
+    n = data['effective_sample_size'].to_numpy().astype(int)
+
+
+    # 2) delta가 1‐원소 리스트로 넘어왔을 때, 첫번째 원소를 사용
+    if isinstance(delta, list) and len(delta) == 1:
+        delta = delta[0]
+
+    # 3) NumPy 형태로 변환 및 유효성 검사
+    p = np.asarray(p)
+    n = np.asarray(n, dtype=int)
+    assert np.all(p >= 0), "observed values must be non‐negative"
+    assert np.all(n >= 0), "effective sample size must be non‐negative"
+
+    # 4) "비율 * 표본크기" → 정수 카운트로 변환
+    obs_counts = np.round(p * n).astype(int)  
+    n_int      = n.copy()                    
+
+    # 5) 표본 크기가 0보다 큰 인덱스를 미리 구한다
+    nonzero_idx = np.where(n_int > 0)[0]     
+
+    # 6) TensorVariable 형태로 "mu_obs_all" 계산
+    mu_obs_all = pi * n_int + 1e-9            
+    alpha_all  = delta                        
+
+    # 7) "표본크기>0" 부분만 뽑아낸다
+    mu_obs = at.take(mu_obs_all, nonzero_idx)           
+    if hasattr(alpha_all, "shape"):
+        alpha_obs = at.take(alpha_all, nonzero_idx)
+    else:
+        alpha_obs = alpha_all
+
+    # 8) 관측 likelihood → Potential
+    nb_dist   = pm.NegativeBinomial.dist(mu=mu_obs, alpha=alpha_obs)
+    logp_val  = pm.logp(nb_dist, obs_counts[nonzero_idx])  
+    summed_lp = at.sum(logp_val)
+    pm.Potential(name=f"p_obs_{data_type}", var=summed_lp)
+
+    # 9) posterior predictive: n_pred에서 0인 표본만 큰 값으로 치환
+    n_pred = n_int.copy()
+    n_pred[n_pred == 0] = int(1e9)         
+    mu_pred = pi * n_pred + 1e-9            
+
+    # 10) 예측된 비율을 Deterministic으로 등록
+    p_pred = pm.Deterministic(
+        name=f"p_pred_{data_type}",
+        var=mu_pred / n_pred                
+    )
+
+
+def neg_binom_lower_bound(pi, delta):
+    """
+    Generate PyMC objects for a negative binomial lower bound model
+
+    Parameters
+    ----------
+    name  : str
+    pi    : Tensor or array, expected rate per unit sample size
+    delta : Tensor or array, dispersion (alpha) parameter
+    p     : array, observed rates
+    n     : array, sample sizes (to scale rates to counts)
+
+    Returns
+    -------
+    dict with keys:
+        - p_obs: potential log-likelihood enforcing lower bound
+    """
+
+    # --------------------------- 1) initialize pm_model ---------------------------   
+    pm_model = pm.modelcontext(None) # at reforged_mr/model/likelihood/neg_binom_lower_bound()
+
+
+    # --------------------------- 2) extract shared data ---------------------------   
+    data_type = pm_model.shared_data["data_type"]
+    data_type = f'lb_{data_type}'
+
+    lb_data = pm_model.shared_data["lb_data"]
+    p = lb_data['value'].to_numpy()
+    n = lb_data['effective_sample_size'].to_numpy().astype(int)
+
+
+    # 3) NumPy 형태로 변환 및 유효성 검사
+    p = np.asarray(p)
+    n = np.asarray(n, dtype=int)
+    assert np.all(p >= 0), 'observed values must be non-negative'
+    assert np.all(n > 0), 'effective sample size must be positive'
+
+
+    # Convert to integer counts
+    obs_counts = np.round(p * n).astype(int)
+    n_int = n.astype(int)
+
+    # Mean counts
+    mu = pi * n_int + 1e-9
+    # Lower-bound counts: max(obs, mu)
+    counts_lb = pm.math.maximum(obs_counts, mu)
+
+    # Negative binomial log-likelihood potential
+    dist = pm.NegativeBinomial.dist(mu=mu, alpha=delta)
+    # sum logp over observations
+    logp = dist.logp(counts_lb)
+    p_obs = pm.Potential(f'p_obs_{data_type}', pm.math.sum(logp))
+
+
+# beta_binom은 수동으로 구현한 것, beta_binom_2는 pymc 내장 함수로 구현한 것
+# 내장함수로 구현한 걸 믿겠음. beta_binom_2 사용
+def beta_binom(pi, delta) -> None:
+    """
+    Generate PyMC objects for a beta-binomial model with faster computation
+
+    Parameters
+    ----------
+    name : str
+    pi   : Tensor or array, expected success probabilities
+    delta: Tensor or array, dispersion (pseudocount fraction) parameter
+    p    : array, observed proportions
+    n    : array, effective sample sizes
+
+    Returns
+    -------
+    dict with keys:
+      - p_obs: observed BetaBinomial RV
+      - p_pred: posterior predictive proportion
+    """
+
+    # --------------------------- 1) initialize pm_model ---------------------------   
+    pm_model = pm.modelcontext(None) # at reforged_mr/model/likelihood/beta_binom()
+
+
+    # --------------------------- 2) extract shared data ---------------------------   
+    data_type = pm_model.shared_data["data_type"]
+    data = pm_model.shared_data["data"]
+    p = data['value'].to_numpy(),
+    n = data['effective_sample_size'].to_numpy().astype(int)
+
+
+    # input validation
+    p = np.asarray(p)
+    n = np.asarray(n, dtype=int)
+    assert np.all(p >= 0), 'observed values must be non-negative'
+    assert np.all(n >= 0), 'effective sample size must be non-negative'
+
+    # Observed counts and integer sizes
+    obs_counts = np.round(p * n).astype(int)
+    n_int = n.astype(int)
+
+    # Create mask for non-zero sample sizes
+    mask = n_int > 0
+    
+    # Parameterize BetaBinomial with alpha, beta
+    alpha_param = pi * delta * 50
+    beta_param = (1 - pi) * delta * 50
+
+    # Use PyTensor indexing for tensors
+    import pytensor.tensor as at
+    
+    # Get masked versions of the parameters
+    n_masked = n_int[mask]
+    obs_counts_masked = obs_counts[mask]
+    
+    # For PyTensor tensors, we need to use at.take with boolean mask
+    if hasattr(alpha_param, 'shape'):
+        # Convert boolean mask to indices
+        mask_indices = np.where(mask)[0]
+        alpha_masked = at.take(alpha_param, mask_indices)
+        beta_masked = at.take(beta_param, mask_indices)
+    else:
+        # If they're scalars, use them as is
+        alpha_masked = alpha_param
+        beta_masked = beta_param
+
+    p_obs = pm.BetaBinomial(
+        name=f'p_obs_{data_type}',
+        n=n_masked,
+        alpha=alpha_masked,
+        beta=beta_masked,
+        observed=obs_counts_masked
+    )
+
+    # Posterior predictive counts: replace zero-sample cases
+    n_pred = n_int.copy()
+    n_pred[n_pred == 0] = int(1e9)
+
+    count_pred = pm.BetaBinomial(
+        name=f'p_count_{data_type}',
+        n=n_pred,
+        alpha=alpha_param,
+        beta=beta_param
+    )
+    p_pred = pm.Deterministic(
+        name=f'p_pred_{data_type}',
+        var=count_pred / n_pred
+    )
+
+
+def normal(pi, sigma) -> None:
+    """
+    Generate PyMC objects for a normal model
+
+    Parameters
+    ----------
+    name  : str
+    pi    : Tensor or array, expected values
+    sigma : Tensor or array, model dispersion parameter
+    p     : array, observed values
+    s     : array, observational standard errors
+
+    Returns
+    -------
+    dict with keys:
+        - p_obs: observed Normal RV
+        - p_pred: posterior predictive Normal RV
+    """
+
+    # --------------------------- 1) initialize pm_model ---------------------------   
+    pm_model = pm.modelcontext(None) # at reforged_mr/model/likelihood/normal()
+
+
+    # --------------------------- 2) extract shared data ---------------------------   
+    data_type = pm_model.shared_data["data_type"]
+    data = pm_model.shared_data["data"]
+    p = data['value'].to_numpy(),
+    s = data['standard_error'].to_numpy()
+
+    
+    p = np.array(p)
+    s = np.array(s)
+    assert np.all(s >= 0), 'standard error must be non-negative'
+
+    var = sigma**2 + s**2
+    std = np.sqrt(var)
+
+    p_obs = pm.Normal(
+        name=f'p_obs_{data_type}',
+        mu=pi,
+        sigma=std,
+        observed=p
+    )
+    p_pred = pm.Normal(
+        name=f'p_pred_{data_type}',
+        mu=pi,
+        sigma=std
+    )
+
+
+def log_normal(pi, sigma) -> None:
+    """
+    Generate PyMC objects for a lognormal model on log scale with observational error.
+    수정된 부분: Normal과 Deterministic 이름 충돌 해결
+    """
+
+    # --------------------------- 1) initialize pm_model ---------------------------   
+    pm_model = pm.modelcontext(None) # at reforged_mr/model/likelihood/log_normal()
+
+
+    # --------------------------- 2) extract shared data ---------------------------   
+    data_type = pm_model.shared_data["data_type"]
+    data = pm_model.shared_data["data"]
+    p = data['value'].to_numpy(),
+    s = data['standard_error'].to_numpy()
+
+    
+    # 1) NumPy array로 변환
+    p = np.array(p)
+    s = np.array(s)
+
+    # 디버그: 잘못된 인덱스 찾아 출력
+    bad_p_idx = np.where(p <= 0)[0]
+    bad_s_idx = np.where(s < 0)[0]
+    if bad_p_idx.size > 0:
+        print(f"[DEBUG] data_type={data_type}: p 배열에서 0 이하인 값 (총 {bad_p_idx.size}개):")
+        for i in bad_p_idx:
+            print(f"    index={i}, p[{i}]={p[i]}")
+    if bad_s_idx.size > 0:
+        print(f"[DEBUG] data_type={data_type}: s 배열에서 음수인 값 (총 {bad_s_idx.size}개):")
+        for i in bad_s_idx:
+            print(f"    index={i}, s[{i}]={s[i]}")
+
+    # 2) 관측값 유효성 검사
+    assert np.all(p > 0), 'observed values must be positive'
+    assert np.all(s >= 0), 'standard error must be non-negative'
+
+    # 3) 관측 로그값은 NumPy로 미리 계산
+    log_p_np = np.log(p)
+
+    # 4) 관측 분산 및 표준편차 (PyTensor)
+    var = sigma**2 + (s / p)**2
+    std = pm.math.sqrt(var)
+
+    # 5) 모델링
+    log_pi = pm.math.log(pi + 1e-9)
+
+    p_obs = pm.Normal(
+        name=f'p_obs_{data_type}',
+        mu=log_pi,
+        sigma=std,
+        observed=log_p_np
+    )
+
+    # 1) 로그 예측치 RV 이름: p_log_pred_...
+    log_p_pred = pm.Normal(
+        name=f'p_log_pred_{data_type}',  
+        mu=log_pi,
+        sigma=std
+    )
+
+    # 2) 역변환된 예측치 Deterministic 이름은 p_pred_... 로 다르게 설정
+    p_pred = pm.Deterministic(
+        name=f'p_pred_{data_type}',      
+        var=pm.math.exp(log_p_pred)
+    )
+
+
+def offset_log_normal(pi, sigma) -> None:
+    """
+    Generate PyMC objects for an offset log-normal model (수정 판)
+
+    주요 변경점:
+      - pm.Normal.dist(...).logp(log_obs) → pm.logp(pm.Normal.dist(...), log_obs)
+    """
+
+    # --------------------------- 1) initialize pm_model ---------------------------   
+    pm_model = pm.modelcontext(None) # at reforged_mr/model/likelihood/offset_log_normal()
+
+
+    # --------------------------- 2) extract shared data ---------------------------   
+    data_type = pm_model.shared_data["data_type"]
+    data = pm_model.shared_data["data"]
+    p = data['value'].to_numpy(),
+    s = data['standard_error'].to_numpy()
+
+
+    # 1) NumPy array 변환 및 유효성 검사
+    p = np.array(p)
+    s = np.array(s)
+    assert np.all(p >= 0), 'observed values must be non-negative'
+    assert np.all(s >= 0), 'standard error must be non-negative'
+
+    # 2) offset Prior 정의
+    p_zeta = pm.Uniform(
+        name=f'p_zeta_{data_type}',
+        lower=1e-9,
+        upper=10.0,
+        initval=1e-6
+    )
+
+    # 3) p + ζ 값 계산 (PyTensor)
+    p_plus_zeta = p_zeta + at.as_tensor(p)  # p는 NumPy, p_zeta는 PyTensor → broadcast
+
+    # 4) 분산·표준편차 (PyTensor)
+    var = sigma**2 + (at.as_tensor(s) / p_plus_zeta)**2
+    std = at.sqrt(var)
+
+    # 5) 관측치 로그 변환 (PyTensor)
+    log_obs = at.log(p_plus_zeta)
+
+    # 6) 예측치 평균 로그(μ) 계산 (PyTensor)
+    pi_plus_zeta = p_zeta + at.as_tensor(pi)  
+    log_pi = at.log(pi_plus_zeta)
+
+    # 7) Log-likelihood를 Potential로 추가하기
+    #    - pm.Normal.dist(...) 로 분포 객체를 만들고, pm.logp(분포, 값) 형태로 logp 벡터를 얻습니다.
+    rv = pm.Normal.dist(mu=log_pi, sigma=std)
+    logp_vec = pm.logp(rv, log_obs)  # ← 여기서 수정된 부분
+    pm.Potential(
+        name=f'p_obs_likelihood_{data_type}', 
+        var=at.sum(logp_vec)
+    )
+
+    # 8) Posterior Predictive 용 latent RV: log_pred ~ Normal(log_pi, std)
+    log_pred = pm.Normal(
+        name=f'log_pred_{data_type}',
+        mu=log_pi,
+        sigma=std
+    )
+
+    # 9) 원래 스케일로 되돌리고 offset(ζ) 제거
+    p_pred = pm.Deterministic(
+        name=f'p_pred_{data_type}',
+        var=at.exp(log_pred) - p_zeta
+    )
+
+
+# def beta_binom(name, pi, p, n):
+#     """
+#     Generate PyMC objects for a beta-binomial model
+
+#     Parameters
+#     ----------
+#     name : str
+#     pi   : Tensor or array, expected success probabilities
+#     p    : array, observed proportions
+#     n    : array, effective sample sizes
+
+#     Returns
+#     -------
+#     dict with keys:
+#       - p_n: Uniform prior on precision (pseudocount)
+#       - pi_latent: array of Beta RVs per observation
+#       - p_obs: observed Binomial RV with latent p
+#       - p_pred: posterior predictive proportions
+#     """
+#     assert np.all(p >= 0), 'observed values must be non-negative'
+#     assert np.all(n >= 0), 'effective sample size must be non-negative'
+
+#     # Prior on precision (pseudocount)
+#     p_n = pm.Uniform(
+#         name=f'p_n_{name}',
+#         lower=1e4,
+#         upper=1e9,
+#         initval=1e4
+#     )
+
+#     # Latent success probabilities per observation
+#     # shape=len(pi)
+#     pi_latent = pm.Beta(
+#         name=f'pi_latent_{name}',
+#         alpha=pi * p_n,
+#         beta=(1 - pi) * p_n,
+#         shape=pi.shape
+#     )
+
+#     # Observed counts and sample sizes
+#     obs_counts = np.round(p * n).astype(int)
+#     n_int = n.astype(int)
+
+#     # Only include nonzero n for likelihood
+#     mask = n_int > 0
+#     p_obs = pm.Binomial(
+#         name=f'p_obs_{name}',
+#         n=n_int[mask],
+#         p=pi_latent[mask],
+#         observed=obs_counts[mask]
+#     )
+
+#     # Predictive counts: replace zero-sample with large N
+#     n_pred = n_int.copy()
+#     n_pred[n_pred == 0] = int(1e6)
+#     p_count = pm.Binomial(
+#         name=f'p_count_{name}',
+#         n=n_pred,
+#         p=pi_latent
+#     )
+#     p_pred = pm.Deterministic(
+#         name=f'p_pred_{name}',
+#         var=p_count / n_pred
+#     )
+
+#     return {'p_n': p_n, 'pi_latent': pi_latent, 'p_obs': p_obs, 'p_pred': p_pred}
