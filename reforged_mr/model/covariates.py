@@ -9,7 +9,7 @@ import pytensor.tensor as at
 SEX_VALUE = {'Male': .5, 'Both': 0., 'Female': -.5}
 
 
-def MyTruncatedNormal(name, mu, sigma, lower, upper, initval):
+def MyTruncatedNormal(name, mu, sigma, lower, upper):
     # 1) latent unconstrained
     z = pm.Normal(f"{name}_z", mu=0, sigma=1)
     # 2) map into [lower,upper]
@@ -32,68 +32,67 @@ def MyTruncatedNormal(name, mu, sigma, lower, upper, initval):
     return sigma
 
 
-def build_random_effects_matrix( # FIX LOGIC
+def build_random_effects_matrix(
     input_data: pd.DataFrame,
-    region_id_graph: nx.DiGraph,
+    region_graph: nx.DiGraph,
     root_area_id: int,
-    parameters: Dict[str, Any],
-) -> Tuple[pd.DataFrame, pd.Series]:
+    parameters: dict
+) -> tuple[pd.DataFrame, pd.Series]:
     """
-    Construct the random-effects indicator matrix U and its shift vector U_shift.
-
-    Returns
-    -------
-    U : pd.DataFrame
-        Indicator matrix of shape (n_obs, n_effects) for random effects.
-    U_shift : pd.Series
-        Shift vector for centering, indexed by the same columns as U.
+    Construct the random‐effects indicator matrix U and its shift vector U_shift.
+    Prints intermediate results to aid understanding.
     """
-
-    global_id = 1 # TODO: make it a parameter later 
+    global_id = 1
     n = len(input_data)
+    nodes = list(region_graph.nodes)
 
-    nodes = list(region_id_graph.nodes)
-    U = pd.DataFrame(0.0, index=input_data.index, columns=nodes)
-
-    for idx, location_id in input_data['location_id'].items():
-        if location_id not in region_id_graph:
-            print(f'WARNING: "{location_id}" not in model hierarchy, skipping')
-            continue
-        path = nx.shortest_path(region_id_graph, global_id, location_id)
-        for lvl, node in enumerate(path):
-            region_id_graph.nodes[node]['level'] = lvl
-            U.at[idx, node] = 1.0
-
+    # 1) Compute and store depth (“level”) of every node    
+    levels = {}
     for node in nodes:
-        path = nx.shortest_path(region_id_graph, global_id, node)
+        path = nx.shortest_path(region_graph, global_id, node)
         for lvl, nd in enumerate(path):
-            region_id_graph.nodes[nd]['level'] = lvl
+            levels[nd] = lvl
+    nx.set_node_attributes(region_graph, levels, 'level')
+
+    # 2) Build indicator matrix U: row i has 1’s for all ancestors of that obs’s location
+    U = pd.DataFrame(0.0, index=input_data.index, columns=nodes)
+    for idx, loc in input_data['location_id'].items():
+        if loc not in region_graph:
+            continue
+        for nd in nx.shortest_path(region_graph, global_id, loc):
+            U.at[idx, nd] = 1.0
 
     if U.empty:
+        print("Empty U → no random effects")
         return U, pd.Series(dtype=float)
 
-    base_level = region_id_graph.nodes[root_area_id]['level']
+    print(f"U.shape: {U.shape}")
+
+    # 3) Keep only nodes below the reference level and with some variation (or constant RE)
+    base_level = region_graph.nodes[root_area_id]['level']
+    print(f'base_level: {base_level}')
+    keep_consts = {
+        name
+        for name, spec in parameters.get('random_effects', {}).items()
+        if spec.get('dist') == 'Constant'
+    }
     cols = [
         c for c in nodes
-        if U[c].any() and region_id_graph.nodes[c]['level'] > base_level
+        if U[c].sum() > 0              # (a) it actually appears for at least one observation
+        and levels[c] > base_level     # (b) it’s deeper than (i.e. below) the reference level
+        and (1 <= U[c].sum() < n       # (c1) it varies: not in zero rows, not in every row
+            or c in keep_consts)       # (c2) or it’s explicitly marked Constant
     ]
-    U = U[cols]
-
-    keep_consts = [
-        name for name, spec in parameters.get('random_effects', {}).items()
-        if spec.get('dist') == 'Constant'
-    ]
-
-    valid = [c for c in U.columns if 1 <= U[c].sum() < n or c in keep_consts]
-    U = U[valid].copy()
-
-    path_to_root = nx.shortest_path(region_id_graph, global_id, root_area_id)
-    U_shift = pd.Series(
-        {c: (1.0 if c in path_to_root else 0.0)
-        for c in U.columns},
-        dtype=float)
-
-    U = U.sub(U_shift, axis=1)
+    U = U[cols].copy()
+    print(f"U.shape after filtering: {U.shape}")
+    
+    # 4) Build and apply centering shift so reference area has net zero effect
+    path_to_ref = set(nx.shortest_path(region_graph, global_id, root_area_id))
+    shifts = {c: 1.0 if c in path_to_ref else 0.0 for c in U.columns}
+    U_shift = pd.Series(shifts, index=U.columns)
+    U = U.sub(U_shift, axis=1) # subtract U_shift from each row of U
+    print(f"U.shape after centering: {U.shape}")
+    print(f"U_shift.shape: {U_shift.shape}")
     return U, U_shift
 
 
@@ -112,6 +111,7 @@ def build_sigma_alpha(
     for i in range(max_depth):
         name = f'sigma_alpha_{data_type}_{i}'
         spec = re_specs.get(name)
+        print(f"spec: {spec}")
 
         if spec:
             # 사용자 지정 하이퍼 prior
@@ -119,14 +119,12 @@ def build_sigma_alpha(
             s0 = max(float(spec['sigma']), 1e-3)
             lb = min(mu, spec['lower'])
             ub = max(mu, spec['upper'])
-            init = float(spec['mu'])
         else:
             # 원래의 기본값 유지
             mu = 0.05
             s0 = 0.03
             lb = 0.05
             ub = 0.5
-            init = 0.1
 
         sigma_alpha.append(
             MyTruncatedNormal(
@@ -134,8 +132,7 @@ def build_sigma_alpha(
                 mu=mu,
                 sigma=s0,
                 lower=lb,
-                upper=ub,
-                initval=init
+                upper=ub
             )
         )
 
@@ -150,17 +147,7 @@ def build_alpha(
     zero_re: bool,
     region_id_graph: nx.DiGraph,
 ) -> Tuple[List[Any], List[float], List[Any]]:
-    """
-    랜덤 효과 계수 alpha, 상수 sigma 리스트, sum-to-zero potential 리스트 생성
-
-    :param data_type: 파라미터 종류 문자열 (예: 'p', 'i' 등)
-    :param U: 각 노드별 디자인 행렬 (DataFrame, 컬럼 이름이 노드명)
-    :param sigma_alpha: level별 랜덤 효과 표준편차 RV 리스트
-    :param parameters: user-specified prior 설정 dict
-    :param zero_re: sum-to-zero 제약 적용 여부
-    :param hierarchy: area hierarchy (DiGraph)
-    :returns: (alpha 리스트, const_alpha_sigma 리스트, alpha_potentials 리스트)
-    """
+    
     alpha: List[Any] = []
     const_alpha_sigma: List[float] = []
     alpha_potentials: List[Any] = []
@@ -195,8 +182,7 @@ def build_alpha(
                     mu=mu0,
                     sigma=s0,
                     lower=lb,
-                    upper=ub,
-                    initval=0.0
+                    upper=ub
                 )
             elif dist == 'Constant':
                 # 상수 prior인 경우 float로 처리
@@ -259,22 +245,6 @@ def build_alpha(
 
 
 def mean_covariate_model(mu: at.TensorVariable, use_lb_data: bool = False):
-    """
-    공변량(고정효과)과 랜덤효과를 포함한 예측 변수(pi)를 생성하는 함수
-
-    매개변수:
-    - data_type: 변수명 접두사로 사용할 문자열
-    - mu: 기준 평균값 (스칼라 혹은 모집단 수준 효과)
-    - input_data: 관측 데이터를 담은 DataFrame
-    - parameters: 사용자 지정 priors 설정 사전
-    - model: ModelData 객체 (hierarchy, output_template 포함)
-    - root_area, root_sex, root_year: 기준(reference) 영역, 성별, 연도
-    - zero_re: True면 참조집단 랜덤효과를 0으로 고정
-
-    반환값:
-    고정효과 및 랜덤효과, 예측값 pi 등을 담은 dict
-    """
-
     # --------------------------- 1) initialize pm_model ---------------------------   
     pm_model = pm.modelcontext(None) # at reforged_mr/model/covariates/mean_covariate_model()
 
@@ -296,9 +266,10 @@ def mean_covariate_model(mu: at.TensorVariable, use_lb_data: bool = False):
         input_data = lb_data
 
 
-    # --- 1) 랜덤 효과 행렬 생성 및 shift 벡터 계산 ---
     U, U_shift = build_random_effects_matrix(input_data, region_id_graph, root_area_id, parameters)
+
     sigma_alpha = build_sigma_alpha(data_type, parameters)
+
     alpha, const_alpha_sigma, alpha_potentials = build_alpha(
         data_type=data_type,
         U=U,
@@ -309,40 +280,36 @@ def mean_covariate_model(mu: at.TensorVariable, use_lb_data: bool = False):
     )
 
 
-    # --- 2) 고정효과(covariate) 행렬 구성 ---
     keep = [c for c in input_data.columns if c.startswith('x_')]
     X = input_data[keep].copy()
     X['x_sex'] = [SEX_VALUE[row['sex']] for _, row in input_data.iterrows()]
 
-    # --- 3) 센터링을 위한 shift 계산 ---
+
     X_shift = pd.Series(0.0, index=X.columns)
-    # output_template에서 area, sex, year별 평균 추출
     tpl = output_template.groupby(['area', 'sex', 'year']).mean(numeric_only=True)
 
-    # covariate 및 pop 열만 선택 (없는 열은 reindex로 0으로 채움)
     covs = tpl.reindex(columns=list(X.columns) + ['pop'] , fill_value=0)
 
-    # 계층구조에서 리프 노드(하위 노드 없는 영역) 추출
     leaves = [region_id_graph.nodes[n]['name'] for n in nx.bfs_tree(region_id_graph, root_area_id)
             if region_id_graph.out_degree(n) == 0] or [region_id_graph.nodes[root_area_id]['name']]
-    # 참조 조건에 따라 leaf_cov 선택
+    
+    print(f"leaves: {leaves}")
+
     if root_sex == 'Both' and root_year == 'all':
+        print(f"covs: {covs}")
         cov_tmp = covs.reset_index().drop(['sex', 'year'], axis=1)
 
         leaf_cov = cov_tmp.groupby('area').mean().loc[leaves]
     else:
         leaf_cov = covs.loc[[(l, root_sex, root_year) for l in leaves]]
 
-    # template에 존재하는 covariate만 shift 반영, 없으면 0 유지
     for cov in X.columns:
         if cov in leaf_cov.columns:
             X_shift[cov] = (leaf_cov[cov] * leaf_cov['pop']).sum() / leaf_cov['pop'].sum()
         else:
             X_shift[cov] = 0.0
-    # 센터링 적용
     X = X - X_shift
 
-    # --- 4) 고정효과 priors 설정 ---
     beta = []
     const_beta_sigma = []
     for effect in X.columns:
@@ -357,39 +324,33 @@ def mean_covariate_model(mu: at.TensorVariable, use_lb_data: bool = False):
                         mu=float(spec['mu']),
                         sigma=max(float(spec['sigma']), 1e-3),
                         lower=float(spec['lower']),
-                        upper=float(spec['upper']),
-                        initval=float(spec['mu'])
+                        upper=float(spec['upper'])
                     )
                 )
             else:
-                # 기본 Normal 분포 사용
                 beta.append(pm.Normal(name,
                                        mu=spec.get('mu', 0),
                                        sigma=spec.get('sigma', 1)))
-            # Constant인 경우 sigma 기록, 아니면 NaN
             const_beta_sigma.append(spec.get('sigma') if dist=='Constant' else np.nan)
         else:
-            # 사전 설정 없으면 표준 Normal
             beta.append(pm.Normal(name, mu=0.0, sigma=1.0))
             const_beta_sigma.append(np.nan)
 
 
     n_obs = U.shape[0]
 
-    # 1) stack only if non-empty, else make a zeros vector
     if alpha:
-        alpha_stack = pm.math.stack(alpha)         # shape (n_re,) # TODO: why not use at here?
+        alpha_stack = pm.math.stack(alpha)
         rand_term   = pm.math.dot(U.values, alpha_stack)
     else:
         rand_term   = at.zeros((n_obs,))
 
     if beta:
-        beta_stack = pm.math.stack(beta)           # shape (n_fx,)
+        beta_stack = pm.math.stack(beta)
         fix_term   = pm.math.dot(X.values, beta_stack)
     else:
         fix_term   = at.zeros((n_obs,))
 
-    # 2) combine them just like NumPy would
     pi = pm.Deterministic(
         f"pi_{data_type}",
         mu * pm.math.exp(rand_term + fix_term)
