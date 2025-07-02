@@ -415,6 +415,7 @@ def dispersion_covariate_model(
         if c.startswith("z_") and input_data[c].std() > 0
     ]
     Z = input_data[keep_cols].copy()
+    print(f"Z: {Z}")
 
     # ─── 4) Z가 하나라도 있을 때 ───────────────────────────────────────────
     if len(Z.columns) > 0:
