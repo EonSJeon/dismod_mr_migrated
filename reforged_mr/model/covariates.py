@@ -66,11 +66,9 @@ def build_random_effects_matrix(
         print("Empty U → no random effects")
         return U, pd.Series(dtype=float)
 
-    print(f"U.shape: {U.shape}")
 
     # 3) Keep only nodes below the reference level and with some variation (or constant RE)
     base_level = region_graph.nodes[root_area_id]['level']
-    print(f'base_level: {base_level}')
     keep_consts = {
         name
         for name, spec in parameters.get('random_effects', {}).items()
@@ -84,15 +82,12 @@ def build_random_effects_matrix(
             or c in keep_consts)       # (c2) or it’s explicitly marked Constant
     ]
     U = U[cols].copy()
-    print(f"U.shape after filtering: {U.shape}")
     
     # 4) Build and apply centering shift so reference area has net zero effect
     path_to_ref = set(nx.shortest_path(region_graph, global_id, root_area_id))
     shifts = {c: 1.0 if c in path_to_ref else 0.0 for c in U.columns}
     U_shift = pd.Series(shifts, index=U.columns)
     U = U.sub(U_shift, axis=1) # subtract U_shift from each row of U
-    print(f"U.shape after centering: {U.shape}")
-    print(f"U_shift.shape: {U_shift.shape}")
     return U, U_shift
 
 
@@ -111,7 +106,6 @@ def build_sigma_alpha(
     for i in range(max_depth):
         name = f'sigma_alpha_{data_type}_{i}'
         spec = re_specs.get(name)
-        print(f"spec: {spec}")
 
         if spec:
             # 사용자 지정 하이퍼 prior
@@ -293,10 +287,7 @@ def mean_covariate_model(mu: at.TensorVariable, use_lb_data: bool = False):
     leaves = [region_id_graph.nodes[n]['name'] for n in nx.bfs_tree(region_id_graph, root_area_id)
             if region_id_graph.out_degree(n) == 0] or [region_id_graph.nodes[root_area_id]['name']]
     
-    print(f"leaves: {leaves}")
-
     if root_sex == 'Both' and root_year == 'all':
-        print(f"covs: {covs}")
         cov_tmp = covs.reset_index().drop(['sex', 'year'], axis=1)
 
         leaf_cov = cov_tmp.groupby('area').mean().loc[leaves]
@@ -415,7 +406,6 @@ def dispersion_covariate_model(
         if c.startswith("z_") and input_data[c].std() > 0
     ]
     Z = input_data[keep_cols].copy()
-    print(f"Z: {Z}")
 
     # ─── 4) Z가 하나라도 있을 때 ───────────────────────────────────────────
     if len(Z.columns) > 0:
