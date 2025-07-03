@@ -533,6 +533,10 @@ def return_idata(
         else:
             if verbose:
                 logger.info("  ▶ NUTS 샘플링 수행 중...")
+
+            print("advi warm up")
+            advi = pm.fit(method="advi", n=5000)
+                
             idata = pm.sample(
                 draws=draws,
                 tune=tune,
