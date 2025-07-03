@@ -535,14 +535,15 @@ def return_idata(
                 logger.info("  ▶ NUTS 샘플링 수행 중...")
 
             print("advi warm up")
-            advi = pm.fit(method="advi", n=5000)
+            
+            # advi = pm.fit(method="advi", n=5000)
+            print("no map estimate")
                 
             idata = pm.sample(
                 draws=draws,
                 tune=tune,
                 chains=chains,
                 cores=cores,
-                initvals=map_estimate,
                 target_accept=target_accept,
                 nuts={"max_treedepth": max_treedepth},
                 return_inferencedata=True,
