@@ -298,118 +298,127 @@ def mean_covariate_model(data_type: str,
     반환값:
     고정효과 및 랜덤효과, 예측값 pi 등을 담은 dict
     """
-    # --- 1) 랜덤 효과 행렬 생성 및 shift 벡터 계산 ---
-    U, U_shift = build_random_effects_matrix(input_data, model, root_area, parameters)
-    sigma_alpha = build_sigma_alpha(data_type, parameters)
-    alpha, const_alpha_sigma, alpha_potentials = build_alpha(
-        data_type=data_type,
-        U=U,
-        sigma_alpha=sigma_alpha,
-        parameters=parameters,
-        zero_re=zero_re,
-        hierarchy=model.hierarchy
-    )
+    # # --- 1) 랜덤 효과 행렬 생성 및 shift 벡터 계산 ---
+    # U, U_shift = build_random_effects_matrix(input_data, model, root_area, parameters)
+    # sigma_alpha = build_sigma_alpha(data_type, parameters)
+    # alpha, const_alpha_sigma, alpha_potentials = build_alpha(
+    #     data_type=data_type,
+    #     U=U,
+    #     sigma_alpha=sigma_alpha,
+    #     parameters=parameters,
+    #     zero_re=zero_re,
+    #     hierarchy=model.hierarchy
+    # )
 
 
-    # --- 2) 고정효과(covariate) 행렬 구성 ---
-    keep = [c for c in input_data.columns if c.startswith('x_')]
-    X = input_data[keep].copy()
-    X['x_sex'] = [SEX_VALUE[row['sex']] for _, row in input_data.iterrows()]
+    # # --- 2) 고정효과(covariate) 행렬 구성 ---
+    # keep = [c for c in input_data.columns if c.startswith('x_')]
+    # X = input_data[keep].copy()
+    # X['x_sex'] = [SEX_VALUE[row['sex']] for _, row in input_data.iterrows()]
 
-    # --- 3) 센터링을 위한 shift 계산 ---
-    X_shift = pd.Series(0.0, index=X.columns)
-    # output_template에서 area, sex, year별 평균 추출
-    tpl = model.output_template.groupby(['area', 'sex', 'year']).mean()
-    # covariate 및 pop 열만 선택 (없는 열은 reindex로 0으로 채움)
-    covs = tpl.reindex(columns=list(X.columns) + ['pop'], fill_value=0)
+    # # --- 3) 센터링을 위한 shift 계산 ---
+    # X_shift = pd.Series(0.0, index=X.columns)
+    # # output_template에서 area, sex, year별 평균 추출
+    # tpl = model.output_template.groupby(['area', 'sex', 'year']).mean()
+    # # covariate 및 pop 열만 선택 (없는 열은 reindex로 0으로 채움)
+    # covs = tpl.reindex(columns=list(X.columns) + ['pop'], fill_value=0)
 
-    # 계층구조에서 리프 노드(하위 노드 없는 영역) 추출
-    leaves = [n for n in nx.bfs_tree(model.hierarchy, root_area)
-              if model.hierarchy.out_degree(n) == 0] or [root_area]
-    # 참조 조건에 따라 leaf_cov 선택
-    if root_sex == 'Both' and root_year == 'all':
-        cov_tmp = covs.reset_index().drop(['sex', 'year'], axis=1)
-        leaf_cov = cov_tmp.groupby('area').mean().loc[leaves]
-    else:
-        leaf_cov = covs.loc[[(l, root_sex, root_year) for l in leaves]]
+    # # 계층구조에서 리프 노드(하위 노드 없는 영역) 추출
+    # leaves = [n for n in nx.bfs_tree(model.hierarchy, root_area)
+    #           if model.hierarchy.out_degree(n) == 0] or [root_area]
+    # # 참조 조건에 따라 leaf_cov 선택
+    # if root_sex == 'Both' and root_year == 'all':
+    #     cov_tmp = covs.reset_index().drop(['sex', 'year'], axis=1)
+    #     leaf_cov = cov_tmp.groupby('area').mean().loc[leaves]
+    # else:
+    #     leaf_cov = covs.loc[[(l, root_sex, root_year) for l in leaves]]
 
-    # template에 존재하는 covariate만 shift 반영, 없으면 0 유지
-    for cov in X.columns:
-        if cov in leaf_cov.columns:
-            X_shift[cov] = (leaf_cov[cov] * leaf_cov['pop']).sum() / leaf_cov['pop'].sum()
-        else:
-            X_shift[cov] = 0.0
-    # 센터링 적용
-    X = X - X_shift
+    # # template에 존재하는 covariate만 shift 반영, 없으면 0 유지
+    # for cov in X.columns:
+    #     if cov in leaf_cov.columns:
+    #         X_shift[cov] = (leaf_cov[cov] * leaf_cov['pop']).sum() / leaf_cov['pop'].sum()
+    #     else:
+    #         X_shift[cov] = 0.0
+    # # 센터링 적용
+    # X = X - X_shift
 
-    # --- 4) 고정효과 priors 설정 ---
-    beta = []
-    const_beta_sigma = []
-    for effect in X.columns:
-        name = f'beta_{data_type}_{effect}'
-        spec = parameters.get('fixed_effects', {}).get(effect)
-        if spec:
-            dist = spec['dist']
-            if dist == 'TruncatedNormal':
-                beta.append(
-                    MyTruncatedNormal(
-                        name=name,
-                        mu=float(spec['mu']),
-                        sigma=max(float(spec['sigma']), 1e-3),
-                        lower=float(spec['lower']),
-                        upper=float(spec['upper']),
-                        initval=float(spec['mu'])
-                    )
-                )
-            else:
-                # 기본 Normal 분포 사용
-                beta.append(pm.Normal(name,
-                                       mu=spec.get('mu', 0),
-                                       sigma=spec.get('sigma', 1)))
-            # Constant인 경우 sigma 기록, 아니면 NaN
-            const_beta_sigma.append(spec.get('sigma') if dist=='Constant' else np.nan)
-        else:
-            # 사전 설정 없으면 표준 Normal
-            beta.append(pm.Normal(name, mu=0.0, sigma=1.0))
-            const_beta_sigma.append(np.nan)
+    # # --- 4) 고정효과 priors 설정 ---
+    # beta = []
+    # const_beta_sigma = []
+    # for effect in X.columns:
+    #     name = f'beta_{data_type}_{effect}'
+    #     spec = parameters.get('fixed_effects', {}).get(effect)
+    #     if spec:
+    #         dist = spec['dist']
+    #         if dist == 'TruncatedNormal':
+    #             beta.append(
+    #                 MyTruncatedNormal(
+    #                     name=name,
+    #                     mu=float(spec['mu']),
+    #                     sigma=max(float(spec['sigma']), 1e-3),
+    #                     lower=float(spec['lower']),
+    #                     upper=float(spec['upper']),
+    #                     initval=float(spec['mu'])
+    #                 )
+    #             )
+    #         else:
+    #             # 기본 Normal 분포 사용
+    #             beta.append(pm.Normal(name,
+    #                                    mu=spec.get('mu', 0),
+    #                                    sigma=spec.get('sigma', 1)))
+    #         # Constant인 경우 sigma 기록, 아니면 NaN
+    #         const_beta_sigma.append(spec.get('sigma') if dist=='Constant' else np.nan)
+    #     else:
+    #         # 사전 설정 없으면 표준 Normal
+    #         beta.append(pm.Normal(name, mu=0.0, sigma=1.0))
+    #         const_beta_sigma.append(np.nan)
 
 
-    n_obs = U.shape[0]
+    # n_obs = U.shape[0]
 
-    # 1) stack only if non-empty, else make a zeros vector
-    if alpha:
-        alpha_stack = pm.math.stack(alpha)         # shape (n_re,)
-        rand_term   = pm.math.dot(U.values, alpha_stack)
-    else:
-        rand_term   = at.zeros((n_obs,))
+    # # 1) stack only if non-empty, else make a zeros vector
+    # if alpha:
+    #     alpha_stack = pm.math.stack(alpha)         # shape (n_re,)
+    #     rand_term   = pm.math.dot(U.values, alpha_stack)
+    # else:
+    #     rand_term   = at.zeros((n_obs,))
 
-    if beta:
-        beta_stack = pm.math.stack(beta)           # shape (n_fx,)
-        fix_term   = pm.math.dot(X.values, beta_stack)
-    else:
-        fix_term   = at.zeros((n_obs,))
+    # if beta:
+    #     beta_stack = pm.math.stack(beta)           # shape (n_fx,)
+    #     fix_term   = pm.math.dot(X.values, beta_stack)
+    # else:
+    #     fix_term   = at.zeros((n_obs,))
 
-    # 2) combine them just like NumPy would
+    # # 2) combine them just like NumPy would
+    # pi = pm.Deterministic(
+    #     f"pi_{data_type}",
+    #     mu * pm.math.exp(rand_term + fix_term)
+    # )
+
     pi = pm.Deterministic(
         f"pi_{data_type}",
-        mu * pm.math.exp(rand_term + fix_term)
+        mu
     )
-
-    # 결과 dict 반환
+ # 결과 dict 반환
     return {
         'pi': pi,
-        'U': U,
-        'U_shift': U_shift,
-        'sigma_alpha': sigma_alpha,
-        'alpha': alpha,
-        'alpha_potentials': alpha_potentials,
-        'const_alpha_sigma': const_alpha_sigma,
-        'X': X,
-        'X_shift': X_shift,
-        'beta': beta,
-        'const_beta_sigma': const_beta_sigma,
-        'hierarchy': model.hierarchy
     }
+
+    # 결과 dict 반환
+    # return {
+    #     'pi': pi,
+    #     'U': U,
+    #     'U_shift': U_shift,
+    #     'sigma_alpha': sigma_alpha,
+    #     'alpha': alpha,
+    #     'alpha_potentials': alpha_potentials,
+    #     'const_alpha_sigma': const_alpha_sigma,
+    #     'X': X,
+    #     'X_shift': X_shift,
+    #     'beta': beta,
+    #     'const_beta_sigma': const_beta_sigma,
+    #     'hierarchy': model.hierarchy
+    # }
 
 
 
