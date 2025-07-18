@@ -273,7 +273,6 @@ def generate_pymc_objects(
     pm_model.shared_data['reference_area_id']    = pm_model.shared_data['name_to_id'][reference_area]
     pm_model.shared_data['reference_sex']        = reference_sex
     pm_model.shared_data['reference_year']       = reference_year
-    pm_model.shared_data['rate_type']            = rate_type
     pm_model.shared_data['zero_re']              = zero_re
 
     ############# 2. Filter input_data and parameters by data_type (optional: lower_bound) #####################
