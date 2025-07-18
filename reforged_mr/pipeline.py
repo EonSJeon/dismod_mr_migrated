@@ -718,8 +718,227 @@ def predict_for(
     return np.clip(preds, lower, upper)
 
 
+
+def predict_for_v2(
+    pm_model,
+    idata,
+    include_covariates  = True,
+    lower               = 0.0,
+    upper               = 1.0,
+    root_area           = 'Global',
+    root_sex            = 'Both',
+    root_year           = 2009,
+    area                = 'Global',
+    sex                 = 'Female',
+    year                = 2005,
+    population_weighted = 1.0
+    ):
+    
+
+    ##############################################################################################
+    #
+    # Given an age, year, country and sex, predict the prevalence
+    #
+    # 1. age -> h(a)
+    #
+    # 2. country + year                    -> sdi
+    #    country + year + sex              -> tobacco
+    #    (sdi * beta1) + (tobacco * beta2) -> fixed effects
+    #
+    # 3. country -> available ancestors among (alpha_global + alpha_super_region + alpha_region + alpha_country) : random effects
+    #
+    # 4. if country is a region, super region, or global, 
+    #    then use the weighted sumn of the children countries' "prevalnce" : NOTE: prevalance?
+    #
+    ##############################################################################################
+
+
+    # CASE 1: Do not include covariates: Early return once you get h(a)
+    h_a_trace = idata.posterior['constrained_mu_age_p'].values
+    n_chain, n_draw, n_ages = h_a_trace.shape                 # (4, 2000, 93)
+    h_a_trace = h_a_trace.reshape((n_chain * n_draw, n_ages))  # shape = (n_samples, n_ages) -> (8000, 93)
+    h_a_trace_clipped = np.clip(h_a_trace, lower, upper)
+    
+    # Calculate number of clipped
+    n_clipped = np.sum((h_a_trace < lower) | (h_a_trace > upper))
+    pct_clipped = (n_clipped / h_a_trace.size) * 100
+    print(f"Percentage of clipped values: {pct_clipped:.2f}% ({n_clipped:,} out of {h_a_trace.size:,})")
+
+    # Early return if not include covariates
+    if not include_covariates:    
+        return h_a_trace_clipped
+    
+
+
+    # CASE 2: Include covariates: Get the covariates and calculate the prevalence
+    n_samples = h_a_trace.shape[0]
+
+    # Get relevant data from pm_model        
+    alpha = pm_model.shared_data['alpha']
+    const_alpha_sigma = pm_model.shared_data['const_alpha_sigma']
+    beta = pm_model.shared_data['beta']
+    const_beta_sigma = pm_model.shared_data['const_beta_sigma']
+    X = pm_model.shared_data['X']
+    X_shift = pm_model.shared_data['X_shift']
+    output_template = pm_model.shared_data['output_template']
+    region_id_graph = pm_model.shared_data['region_id_graph']
+    name_to_id = pm_model.shared_data['name_to_id']
+    U = pm_model.shared_data['U']
+    U_shift = pm_model.shared_data['U_shift']
+    id_to_name = pm_model.shared_data['id_to_name']
+
+
+    # Get beta_trace (fixed effects) : shape = (n_samples, n_ages) -> (8000, 93)
+    print(beta)
+    print(const_beta_sigma)
+    beta_trace = np.empty((n_samples, 0))
+    if isinstance(beta, list) and beta:
+        traces = []
+        for beta_node, sigma_const in zip(beta, const_beta_sigma):
+            name_beta = beta_node.name
+            # print(name_beta)
+            if name_beta in idata.posterior:
+                arr_b = idata.posterior[name_beta].values  # (chains, draws)
+                traces.append(arr_b.reshape(n_chain * n_draw))
+            else:
+                sig = max(sigma_const, 1e-9)
+                loc = float(beta_node)
+                draws = np.random.normal(loc=loc, scale=1.0 / np.sqrt(sig), size=n_samples)
+                traces.append(draws)
+        beta_trace = np.column_stack(traces)
+
+
+    # 1. alpha_trace (random effects)
+    alpha_trace = np.empty((n_samples, 0))
+    if isinstance(alpha, list) and alpha:
+        traces = []
+        for alpha_node, sigma_const in zip(alpha, const_alpha_sigma):
+            name_alpha = alpha_node.name
+            # print(name_alpha) 
+            if name_alpha in idata.posterior:
+                arr_a = idata.posterior[name_alpha].values  # (chains, draws)
+                traces.append(arr_a.reshape(n_chain * n_draw))
+            else:
+                sig = max(sigma_const, 1e-9)
+                loc = float(alpha_node)
+                draws = np.random.normal(loc=loc, scale=1.0 / np.sqrt(sig), size=n_samples)
+                traces.append(draws)
+        alpha_trace = np.column_stack(traces)
+
+    
+    # 4) beta_trace (fixed effects) 생성
+    beta_trace = np.empty((n_samples, 0))
+    if isinstance(beta, list) and beta:
+        traces = []
+        for beta_node, sigma_const in zip(beta, const_beta_sigma):
+            name_beta = beta_node.name
+            # print(name_beta)
+            if name_beta in idata.posterior:
+                arr_b = idata.posterior[name_beta].values  # (chains, draws)
+                traces.append(arr_b.reshape(n_chain * n_draw))
+            else:
+                sig = max(sigma_const, 1e-9)
+                loc = float(beta_node)
+                draws = np.random.normal(loc=loc, scale=1.0 / np.sqrt(sig), size=n_samples)
+                traces.append(draws)
+        beta_trace = np.column_stack(traces)
+
+
+    # 5) leaf-nodes 찾기
+    leaves = [n for n in nx.bfs_tree(region_id_graph, name_to_id[area]) if region_id_graph.out_degree(n) == 0]
+    if not leaves:
+        leaves = [name_to_id[area]]
+
+    # 6) output_template에서 (area, sex, year)에 해당하는 pop, covariates 추출
+    output_tpl = output_template.copy()
+    grp = (
+        output_tpl
+        .groupby(["area", "sex", "year"], as_index=False)
+        .mean()
+        .set_index(["area", "sex", "year"])
+    )
+    # len(grp) is equal to lins in output_template.csv
+
+
+    SEX_VALUE = {'Male': .5, 'Both': 0., 'Female': -.5}
+    # 7) X_df (centered covariates) 준비
+    if isinstance(X, pd.DataFrame) and not X.empty:
+        # (1) 원래 vars["X"].columns에 들어있는 이름들로 grp에서 필터
+        X_df = grp.filter(X.columns, axis=1).copy()
+
+        # (2) "x_sex"가 vars["X"].columns에 있으면 강제로 생성
+        if "x_sex" in X.columns:
+            X_df["x_sex"] = SEX_VALUE[sex]
+
+        # (3) shift(centering) 적용
+        X_df = X_df - X_shift
+
+    else:
+        X_df = pd.DataFrame(index=grp.index)
+
+    
+    # 8) U_row Series 준비 (한 행짜리)
+    if isinstance(U, pd.DataFrame) and not U.empty:
+        U_cols = U.columns
+        U_row = pd.Series(0.0, index=U_cols)
+    else:
+        U_row = pd.Series(dtype=float)
+
+
+    # 9) 각 leaf별로 cov_shift 계산
+    cov_shift = np.zeros(n_samples)
+    total_weight = 0.0
+
+    for leaf in leaves:
+        # (1) U_row 재설정
+        U_row[:] = 0.0
+        path = nx.shortest_path(region_id_graph, name_to_id[root_area], leaf)
+        for node in path[1:]:
+            if node in U_row.index:
+                U_row[node] = 1.0 - U_shift.get(node, 0.0)
+
+        # (2) random-effect 기여: alpha_trace · U_row
+        if alpha_trace.size > 0:
+            log_shift = alpha_trace.dot(U_row.values)
+        else:
+            log_shift = np.zeros(n_samples)
+
+        # (3) fixed-effect 기여: beta_trace · X_vals
+        if beta_trace.size and (leaf, sex, year) in X_df.index:
+            x_vals = X_df.loc[(leaf, sex, year)].values
+            log_shift = log_shift + beta_trace.dot(x_vals)
+
+        # (4) population‐weight or unweighted average
+        pop = float(grp.at[(id_to_name[leaf], sex, year), "pop"])
+
+        if population_weighted:
+            cov_shift += np.exp(log_shift) * pop
+            total_weight += pop
+        else:
+            cov_shift += log_shift
+            total_weight += 1.0
+
+
+    # (5) 정규화
+    if population_weighted:
+        cov_shift = cov_shift / total_weight
+    else:
+        cov_shift = np.exp(cov_shift / total_weight)
+
+    # 10) baseline mu_age와 곱하고 clip
+    preds = h_a_trace * cov_shift[:, None]  # shape = (n_samples, n_ages)
+    clipped = np.clip(preds, lower, upper)
+    n_clipped = np.sum((preds < lower) | (preds > upper))
+    pct_clipped = (n_clipped / preds.size) * 100
+    print(f"Percentage of clipped values: {pct_clipped:.2f}% ({n_clipped:,} out of {preds.size:,})")
+    return clipped
+
+
 def visualize_pred(pred, data):
+    # pred: (n_samples, n_ages)
+
     plt.figure(figsize=(10, 4))
+
     data_bars(
         df=data,
         color='grey',
