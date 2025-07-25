@@ -577,12 +577,13 @@ def return_idata(
 def predict_for(
     pm_model,
     idata,
-    include_covariates  = True,
-    lower               = 0.0,
-    upper               = 1.0,
-    year                = 2005,
-    location_id         = 0,        # id of the node in the area hierarchy
-    sex                 = 'Female', # Male or Female (doesn't support Both yet)
+    include_covariates         = True,
+    include_only_sex_covariate = False,
+    lower                      = 0.0,
+    upper                      = 1.0,
+    year                       = 2005,
+    location_id                = 0,        # id of the node in the area hierarchy
+    sex                        = 'Female', # Male or Female (doesn't support Both yet)
     ):
     
 
@@ -613,11 +614,19 @@ def predict_for(
     h_a_trace_clipped = np.clip(h_a_trace, lower, upper)
 
     # Early return if not include covariates
-    if not include_covariates:    
+    if not include_covariates and not include_only_sex_covariate:
         return h_a_trace_clipped
 
     # CASE 2: Include covariates: Get the covariates and calculate the prevalence
     n_samples = h_a_trace.shape[0]
+
+    if include_only_sex_covariate:
+        # Only use sex as covariate
+        beta_sex_trace = idata.posterior['beta_p_x_sex'].values.reshape(n_samples, -1)
+        x_sex = 0.5 if sex == 'Male' else -0.5
+        fixed_effect = beta_sex_trace * x_sex
+        pred = h_a_trace_clipped * np.exp(fixed_effect)
+        return pred
 
     # Get relevant data from pm_model        
     output_template    = pm_model.shared_data['output_template']
@@ -714,7 +723,7 @@ def predict_for(
     return pred
 
 
-def visualize_pred(pred, data, year, area_name, sex, include_covariates):
+def visualize_pred(pred, data, year, area_name, sex, include_covariates, include_only_sex_covariate):
     # pred: (n_samples, n_ages)
 
     plt.figure(figsize=(10, 6))
@@ -746,7 +755,9 @@ def visualize_pred(pred, data, year, area_name, sex, include_covariates):
         'k--', linewidth=1
     )
 
-    if include_covariates:
+    if include_only_sex_covariate:
+        covs = 'with only sex covariate'
+    elif include_covariates:
         covs = 'with covariates'
     else:
         covs = 'without covariates'
