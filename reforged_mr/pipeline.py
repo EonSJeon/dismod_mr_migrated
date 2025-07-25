@@ -250,19 +250,23 @@ def initiliaze_pipeline(filepath, verbose=False):
 
 def generate_pymc_objects(
         pm_model, 
-        data_type            = 'p',
-        lower_bound          = None,
-        interpolation_method = 'linear',
-        include_covariates   = True,
-        mu_age               = None,
-        mu_age_parent        = None,
-        sigma_age_parent     = None,
-        reference_area       = 'Global',
-        reference_sex        = 'Both',
-        reference_year       = 'all',
-        rate_type            = 'neg_binom',
-        zero_re              = False
+        data_type                  = 'p',
+        lower_bound                = None,
+        interpolation_method       = 'linear',
+        include_covariates         = True,
+        include_only_sex_covariate = False,
+        mu_age                     = None,
+        mu_age_parent              = None,
+        sigma_age_parent           = None,
+        reference_area             = 'Global',
+        reference_sex              = 'Both',
+        reference_year             = 'all',
+        rate_type                  = 'neg_binom',
+        zero_re                    = False
     ):
+
+    if include_covariates and include_only_sex_covariate:
+        raise ValueError('Cannot set both include_covariates and include_only_sex_covariate to True.')
 
     ############# 1. Store Parameters to shared_data #########################################################
     pm_model.shared_data['data_type']            = data_type
@@ -361,13 +365,16 @@ def generate_pymc_objects(
             # covariate & pi
             if include_covariates:
                 pi, U, U_shift, sigma_alpha, alpha, alpha_potentials, const_alpha_sigma, X, X_shift, beta, const_beta_sigma = covariates.mean_covariate_model(mu=mu_interval)
-
+            elif include_only_sex_covariate:
+                pi, _, _, _, _, _, _, X, X_shift, beta, const_beta_sigma = covariates.mean_covariate_model_only_sex(mu=mu_interval)
             else:
                 pi = mu_interval
 
         if len(data) <= 0:
             if include_covariates:
                 pi, U, U_shift, sigma_alpha, alpha, alpha_potentials, const_alpha_sigma, X, X_shift, beta, const_beta_sigma = covariates.mean_covariate_model(mu=None)
+            elif include_only_sex_covariate:
+                pi, _, _, _, _, _, _, X, X_shift, beta, const_beta_sigma = covariates.mean_covariate_model_only_sex(mu=None)
             else:
                 assert False, "shouldn't be here"
 
@@ -428,7 +435,8 @@ def generate_pymc_objects(
         ############ Covariate Level Constraints #########################################################
         if include_covariates:
             priors.covariate_level_constraints(X_shift, beta, U, alpha, constrained_mu_age)
-
+        elif include_only_sex_covariate:
+            priors.covariate_level_constraints_only_sex(X_shift, beta, constrained_mu_age)
         ############ Lower Bound #########################################################################
         if lb_data is not None and len(lb_data) > 0:
             lb = {}
@@ -436,6 +444,8 @@ def generate_pymc_objects(
 
             if include_covariates:
                 pi_lb, _, _, _, _, _, _, _, _, _, _ = covariates.mean_covariate_model(mu=mu_interval_lb, use_lb_data=True)
+            elif include_only_sex_covariate:
+                pi_lb, _, _, _, _, _, _, _, _, _, _ = covariates.mean_covariate_model_only_sex(mu=mu_interval_lb, use_lb_data=True)
             else:
                 pi_lb = mu_interval_lb
 
@@ -464,6 +474,12 @@ def generate_pymc_objects(
             pm_model.shared_data['X_shift'] = X_shift
             pm_model.shared_data['U'] = U
             pm_model.shared_data['U_shift'] = U_shift
+
+        elif include_only_sex_covariate:
+            pm_model.shared_data['beta'] = beta
+            pm_model.shared_data['const_beta_sigma'] = const_beta_sigma
+            pm_model.shared_data['X'] = X
+            pm_model.shared_data['X_shift'] = X_shift
 
 
 

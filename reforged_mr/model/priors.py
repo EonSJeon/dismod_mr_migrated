@@ -201,4 +201,53 @@ def covariate_level_constraints(X_shift, beta, U, alpha, mu_age) -> at.TensorVar
 
     # (h) register as a single Potential
     covariate_constraint = pm.Potential(f"covariate_constraint_{data_type}", var=logp_sum)
-    return covariate_constraint
+
+
+
+def covariate_level_constraints_only_sex(X_shift, beta, mu_age):
+    """
+    Enforce level-bounds on the covariate-adjusted rate curve, only for the 'sex' covariate (no random effects).
+    Should be used after covariate_mean_model_only_sex.
+    """
+    pm_model = pm.modelcontext(None)
+    data_type = pm_model.shared_data["data_type"]
+    params = pm_model.shared_data["params_of_data_type"]
+    lvl    = params.get('level_value')
+    bounds = params.get('level_bounds')
+    if not lvl or not bounds:
+        return {}
+
+    # Only use 'x_sex' for covariate effect
+    X_sex_max = 0.5 - X_shift['x_sex']
+    X_sex_min = -0.5 - X_shift['x_sex']
+
+    lower_val = bounds['lower']
+    if lower_val <= 0:
+        low = None
+    else:
+        low = np.log(lower_val)
+    high = np.log(bounds['upper'])
+    mu = mu_age
+    log_vals = at.log(mu)
+    log_max = at.max(log_vals)
+    log_min = at.min(log_vals)
+
+    b_sex = beta[0]  # Only one beta
+    try:
+        log_max = log_max + X_sex_max * b_sex
+        log_min = log_min + X_sex_min * b_sex
+    except (TypeError, AttributeError):
+        log_max = log_max + X_sex_max * float(b_sex)
+        log_min = log_min + X_sex_min * float(b_sex)
+
+    if low is None:
+        v_low = at.constant(0.0)
+    else:
+        v_low = at.minimum(0, log_min - low)
+    v_high = at.maximum(0, log_max - high)
+    sigma = 1e-6
+    stacked_v = at.stack([v_low, v_high])
+    norm_dist = pm.Normal.dist(mu=0.0, sigma=sigma)
+    logp_vals = pm.logp(norm_dist, stacked_v)
+    logp_sum  = at.sum(logp_vals)
+    covariate_constraint = pm.Potential(f"covariate_constraint_only_sex_{data_type}", var=logp_sum)

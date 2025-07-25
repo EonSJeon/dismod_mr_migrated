@@ -350,6 +350,87 @@ def mean_covariate_model(mu: at.TensorVariable, use_lb_data: bool = False):
     return pi, U, U_shift, sigma_alpha, alpha, alpha_potentials, const_alpha_sigma, X, X_shift, beta, const_beta_sigma
 
 
+
+def mean_covariate_model_only_sex(mu: at.TensorVariable, use_lb_data: bool = False):
+    # --------------------------- 1) initialize pm_model ---------------------------   
+    pm_model = pm.modelcontext(None)
+
+    # --------------------------- 2) extract shared data ---------------------------   
+    data_type = pm_model.shared_data["data_type"]
+    input_data = pm_model.shared_data["data"]
+    parameters = pm_model.shared_data["params_of_data_type"]
+    root_sex = pm_model.shared_data["reference_sex"]
+    root_year = pm_model.shared_data["reference_year"]
+    output_template = pm_model.shared_data["output_template"]
+
+    if use_lb_data:
+        data_type = f'lb_{data_type}'
+        lb_data = pm_model.shared_data["lb_data"]
+        input_data = lb_data
+
+    # Only include 'sex' as covariate
+    X = pd.DataFrame(index=input_data.index)
+    X['x_sex'] = [SEX_VALUE[row['sex']] for _, row in input_data.iterrows()]
+    X_shift = pd.Series(0.0, index=['x_sex'])
+    tpl = output_template.groupby(['area', 'sex', 'year']).mean(numeric_only=True)
+    covs = tpl.reindex(columns=['x_sex', 'pop'], fill_value=0)
+    leaves = [row['area'] for _, row in tpl.reset_index().iterrows()]
+    if root_sex == 'Both' and root_year == 'all':
+        cov_tmp = covs.reset_index().drop(['sex', 'year'], axis=1)
+        leaf_cov = cov_tmp.groupby('area').mean().loc[leaves]
+    else:
+        leaf_cov = covs.loc[[(l, root_sex, root_year) for l in leaves]]
+    if 'x_sex' in leaf_cov.columns:
+        X_shift['x_sex'] = (leaf_cov['x_sex'] * leaf_cov['pop']).sum() / leaf_cov['pop'].sum()
+    else:
+        X_shift['x_sex'] = 0.0
+    X = X - X_shift
+
+    # Only build beta for 'x_sex'
+    beta = []
+    const_beta_sigma = []
+    effect = 'x_sex'
+    name = f'beta_{data_type}_{effect}'
+    spec = parameters.get('fixed_effects', {}).get(effect)
+    if spec:
+        dist = spec['dist']
+        if dist == 'TruncatedNormal':
+            beta.append(
+                MyTruncatedNormal(
+                    name=name,
+                    mu=float(spec['mu']),
+                    sigma=max(float(spec['sigma']), 1e-3),
+                    lower=float(spec['lower']),
+                    upper=float(spec['upper'])
+                )
+            )
+        else:
+            beta.append(pm.Normal(name,
+                                   mu=spec.get('mu', 0),
+                                   sigma=spec.get('sigma', 1)))
+        const_beta_sigma.append(spec.get('sigma') if dist=='Constant' else np.nan)
+    else:
+        beta.append(pm.Normal(name, mu=0.0, sigma=1.0))
+        const_beta_sigma.append(np.nan)
+
+    n_obs = X.shape[0]
+    rand_term = at.zeros((n_obs,))  # No random effects
+    if beta:
+        beta_stack = pm.math.stack(beta)
+        fix_term   = pm.math.dot(X.values, beta_stack)
+    else:
+        fix_term   = at.zeros((n_obs,))
+
+    pi = pm.Deterministic(
+        f"pi_{data_type}",
+        mu * pm.math.exp(rand_term + fix_term)
+    )
+
+    # Return values for compatibility, but only relevant ones are filled
+    return pi, None, None, None, None, None, None, X, X_shift, beta, const_beta_sigma
+
+
+
 def dispersion_covariate_model(
     delta_lb: float,
     delta_ub: float,
