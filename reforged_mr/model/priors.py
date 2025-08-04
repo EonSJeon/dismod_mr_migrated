@@ -85,6 +85,11 @@ def derivative_constraints(mu_age: at.TensorVariable):
     i0, i1 = to_idx(inc["age_start"]), to_idx(inc["age_end"])
     d0, d1 = to_idx(dec["age_start"]), to_idx(dec["age_end"])
 
+    assert i1 <= d0 or d1 <= i0, (
+        f"Increasing range [{inc['age_start']}, {inc['age_end']}] overlaps "
+        f"with decreasing range [{dec['age_start']}, {dec['age_end']}]."
+    )
+
     diff = at.diff(mu_age)
     inc_viol = at.sum(at.clip(diff[i0:i1], -np.inf,   0.0))
     dec_viol = at.sum(at.clip(diff[d0:d1],   0.0, np.inf))

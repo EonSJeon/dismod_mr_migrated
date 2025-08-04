@@ -34,7 +34,7 @@ def MyTruncatedNormal(name, mu, sigma, lower, upper):
 
 def build_random_effects_matrix(
     input_data: pd.DataFrame,
-    region_graph: nx.DiGraph,
+    region_id_graph: nx.DiGraph,
     root_area_id: int,
     parameters: dict
 ) -> tuple[pd.DataFrame, pd.Series]:
@@ -44,22 +44,24 @@ def build_random_effects_matrix(
     """
     global_id = 1
     n = len(input_data)
-    nodes = list(region_graph.nodes)
+    nodes = list(region_id_graph.nodes)
 
     # 1) Compute and store depth (“level”) of every node    
-    levels = {}
-    for node in nodes:
-        path = nx.shortest_path(region_graph, global_id, node)
-        for lvl, nd in enumerate(path):
-            levels[nd] = lvl
-    nx.set_node_attributes(region_graph, levels, 'level')
+    # levels = {}
+    # for node in nodes:
+    #     path = nx.shortest_path(region_graph, global_id, node)
+    #     for lvl, nd in enumerate(path):
+    #         levels[nd] = lvl
+    # nx.set_node_attributes(region_graph, levels, 'level')
+    
+    # No need to compute level, it's already computed in initialize_pipeline()
 
     # 2) Build indicator matrix U: row i has 1’s for all ancestors of that obs’s location
     U = pd.DataFrame(0.0, index=input_data.index, columns=nodes)
     for idx, loc in input_data['location_id'].items():
-        if loc not in region_graph:
+        if loc not in region_id_graph:
             continue
-        for nd in nx.shortest_path(region_graph, global_id, loc):
+        for nd in nx.shortest_path(region_id_graph, global_id, loc):
             U.at[idx, nd] = 1.0
 
     if U.empty:
@@ -68,7 +70,7 @@ def build_random_effects_matrix(
 
 
     # 3) Keep only nodes below the reference level and with some variation (or constant RE)
-    base_level = region_graph.nodes[root_area_id]['level']
+    base_level = region_id_graph.nodes[root_area_id]['level']
     keep_consts = {
         name
         for name, spec in parameters.get('random_effects', {}).items()
@@ -76,19 +78,20 @@ def build_random_effects_matrix(
     }
     cols = [
         c for c in nodes
-        if U[c].sum() > 0              # (a) it actually appears for at least one observation
-        and levels[c] > base_level     # (b) it’s deeper than (i.e. below) the reference level
-        and (1 <= U[c].sum() < n       # (c1) it varies: not in zero rows, not in every row
-            or c in keep_consts)       # (c2) or it’s explicitly marked Constant
+        if U[c].sum() > 0
+        and region_id_graph.nodes[c]['level'] > base_level
+        and (1 <= U[c].sum() < n or c in keep_consts)
     ]
     U = U[cols].copy()
+    print(U)
     
     # 4) Build and apply centering shift so reference area has net zero effect
-    path_to_ref = set(nx.shortest_path(region_graph, global_id, root_area_id))
+    path_to_ref = set(nx.shortest_path(region_id_graph, global_id, root_area_id))
     shifts = {c: 1.0 if c in path_to_ref else 0.0 for c in U.columns}
-    U_shift = pd.Series(shifts, index=U.columns)
-    U = U.sub(U_shift, axis=1) # subtract U_shift from each row of U
-    return U, U_shift
+    U_ref = pd.Series(shifts, index=U.columns)
+    U = U.sub(U_ref, axis=1) # subtract U_shift from each row of U
+    print(U_ref)
+    return U, U_ref
 
 
 def build_sigma_alpha(
@@ -238,7 +241,12 @@ def build_alpha(
     return alpha, const_alpha_sigma, alpha_potentials
 
 
-def mean_covariate_model(mu: at.TensorVariable, use_lb_data: bool = False):
+def mean_covariate_model(mu: at.TensorVariable, use_lb_data: bool = False): ######!!!!!!!!!!!!!!ERROR use_lb_data
+    # NOTE:
+    # U_ref and X_centering have different functions. 
+    # U_ref is 0/1 indicator vector to make U(ref) = 0, 
+    # X_centering is a vector of mean of covariates for the centering literally.
+
     # --------------------------- 1) initialize pm_model ---------------------------   
     pm_model = pm.modelcontext(None) # at reforged_mr/model/covariates/mean_covariate_model()
 
@@ -254,13 +262,13 @@ def mean_covariate_model(mu: at.TensorVariable, use_lb_data: bool = False):
     region_id_graph = pm_model.shared_data["region_id_graph"]
     output_template = pm_model.shared_data["output_template"]
 
-    if use_lb_data:
+    if use_lb_data: ######!!!!!!!!!!!!!!ERROR use_lb_data
         data_type = f'lb_{data_type}'
         lb_data = pm_model.shared_data["lb_data"]
         input_data = lb_data
 
 
-    U, U_shift = build_random_effects_matrix(input_data, region_id_graph, root_area_id, parameters)
+    U, U_ref = build_random_effects_matrix(input_data, region_id_graph, root_area_id, parameters)
 
     sigma_alpha = build_sigma_alpha(data_type, parameters)
 
@@ -279,7 +287,7 @@ def mean_covariate_model(mu: at.TensorVariable, use_lb_data: bool = False):
     X['x_sex'] = [SEX_VALUE[row['sex']] for _, row in input_data.iterrows()]
 
 
-    X_shift = pd.Series(0.0, index=X.columns)
+    X_centering = pd.Series(0.0, index=X.columns)
     tpl = output_template.groupby(['area', 'sex', 'year']).mean(numeric_only=True)
 
     covs = tpl.reindex(columns=list(X.columns) + ['pop'] , fill_value=0)
@@ -289,17 +297,16 @@ def mean_covariate_model(mu: at.TensorVariable, use_lb_data: bool = False):
     
     if root_sex == 'Both' and root_year == 'all':
         cov_tmp = covs.reset_index().drop(['sex', 'year'], axis=1)
-
         leaf_cov = cov_tmp.groupby('area').mean().loc[leaves]
     else:
         leaf_cov = covs.loc[[(l, root_sex, root_year) for l in leaves]]
 
     for cov in X.columns:
         if cov in leaf_cov.columns:
-            X_shift[cov] = (leaf_cov[cov] * leaf_cov['pop']).sum() / leaf_cov['pop'].sum()
+            X_centering[cov] = (leaf_cov[cov] * leaf_cov['pop']).sum() / leaf_cov['pop'].sum()
         else:
-            X_shift[cov] = 0.0
-    X = X - X_shift
+            X_centering[cov] = 0.0
+    X = X - X_centering
 
     beta = []
     const_beta_sigma = []
@@ -327,7 +334,6 @@ def mean_covariate_model(mu: at.TensorVariable, use_lb_data: bool = False):
             beta.append(pm.Normal(name, mu=0.0, sigma=1.0))
             const_beta_sigma.append(np.nan)
 
-
     n_obs = U.shape[0]
 
     if alpha:
@@ -347,13 +353,13 @@ def mean_covariate_model(mu: at.TensorVariable, use_lb_data: bool = False):
         mu * pm.math.exp(rand_term + fix_term)
     )
 
-    return pi, U, U_shift, sigma_alpha, alpha, alpha_potentials, const_alpha_sigma, X, X_shift, beta, const_beta_sigma
+    return pi, U, U_ref, sigma_alpha, alpha, alpha_potentials, const_alpha_sigma, X, X_centering, beta, const_beta_sigma
 
 
 def dispersion_covariate_model(
     delta_lb: float,
     delta_ub: float,
-    use_lb_data: bool = False,
+    use_lb_data: bool = False, ######!!!!!!!!!!!!!!ERROR use_lb_data
 ) -> Dict[str, Any]:
     """
     Generate dispersion (delta) covariate model in PyMC 5.3 style.
