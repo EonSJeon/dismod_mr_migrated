@@ -196,7 +196,7 @@ def initiliaze_pipeline(filepath, verbose=False):
     output_template = pd.read_csv(f'{filepath}/output_template.csv')
     parameters      = load_any(f'{filepath}/parameters.jsonc')    
     hierarchy       = load_any(f'{filepath}/hierarchy.json')       
-    nodes_to_fit    = load_any(f'{filepath}/nodes_to_fit.json') 
+    # nodes_to_fit    = load_any(f'{filepath}/nodes_to_fit.json') 
 
     # create region_id_graph with hierarchy
     nodes = hierarchy['nodes']
@@ -205,22 +205,25 @@ def initiliaze_pipeline(filepath, verbose=False):
 
     region_id_graph = nx.DiGraph()
     for node in nodes:
-        name_to_id[node[0]] = node[1]['location_id']
-        id_to_name[node[1]['location_id']] = node[0]
+        node_name = node[0]
+        node_id = node[1]['location_id']
+        node_level = node[1]['level']
+        node_parent_id = node[1]['parent_id']
+
+        name_to_id[node_name] = node_id
+        id_to_name[node_id] = node_name
 
         # add nodes with location_id as the key
         region_id_graph.add_node(
-                                node[1]['location_id'],           # location_id is the node key
-                                level = node[1]['level'],
-                                parent_id = node[1]['parent_id'],
-                                name = node[0]
+                                node_id,           # location_id is the node key
+                                level = node_level,
+                                parent_id = node_parent_id,
+                                name = node_name
                                 )
 
         # add edges between nodes (ignore root node)
-        my_id = node[1]['location_id']
-        parent_id = node[1]['parent_id']
-        if my_id != parent_id: # ignores root node
-            region_id_graph.add_edge(parent_id, my_id)
+        if node_id != node_parent_id: # ignores root node
+            region_id_graph.add_edge(node_parent_id, node_id)
 
     # since the graph is a tree, the number of nodes should be equal to the number of edges + 1
     assert region_id_graph.number_of_nodes() == region_id_graph.number_of_edges() + 1, \
@@ -235,7 +238,7 @@ def initiliaze_pipeline(filepath, verbose=False):
         "id_to_name"             : id_to_name,
         "name_to_id"             : name_to_id,
         "parameters"             : parameters,
-        "nodes_to_fit"           : nodes_to_fit,
+        # "nodes_to_fit"           : nodes_to_fit,
     }
 
     if verbose:
@@ -279,11 +282,11 @@ def generate_pymc_objects(
     ############# 2. Filter input_data and parameters by data_type (optional: lower_bound) #####################
     input_data          = pm_model.shared_data['input_data']
     data                = input_data[input_data['data_type'] == data_type]
-    lb_data             = input_data[input_data['data_type'] == lower_bound] if lower_bound else None
+    lb_data             = input_data[input_data['data_type'] == lower_bound] if lower_bound else None ######!!!!!!!!!!!!!!ERROR
     params_of_data_type = pm_model.shared_data['parameters'][data_type]    
     
     pm_model.shared_data['data']                = data
-    pm_model.shared_data['lower_bound']         = lb_data
+    pm_model.shared_data['lower_bound']         = lb_data ######!!!!!!!!!!!!!!ERROR
     pm_model.shared_data['params_of_data_type'] = params_of_data_type
 
     ############# 3. Fetch ages and age_weights from parameters #####################
@@ -296,21 +299,47 @@ def generate_pymc_objects(
 
     ############# 4. Generate knots and smoothing for spline.spline #########################################################
     knots = np.array(params_of_data_type.get('parameter_age_mesh', np.arange(ages[0], ages[-1] + 1, 5)), dtype=np.float64)
-
-    smooth_map = {'No Prior': np.inf, 'Slightly': 0.5, 'Moderately': 0.05, 'Very': 0.005}  # TMI: type(np.inf) == float
-    smoothness_param = params_of_data_type.get('smoothness')
-    if isinstance(smoothness_param, dict): 
-        amount = smoothness_param.get('amount')
-
-        if isinstance(amount, (int, float)): # smoothness_param is dict, and amount is int or float
-            smoothing = float(amount)
-        else:                                # smoothness_param is dict, and amount may be string
-            smoothing = smooth_map.get(amount, 0.0)
-
-    else:                                    # smoothness_param may be string
-        smoothing = smooth_map.get(smoothness_param, 0.0)
+    if knots[-1] != ages[-1]:
+        knots = np.concatenate([knots, [ages[-1]]])
+    pm_model.shared_data['knots']    = knots 
     
-    pm_model.shared_data['knots']    = knots         
+    smooth_map = {'No Prior': np.inf, 'Slightly': 0.5, 'Moderately': 0.05, 'Very': 0.005}  # TMI: type(np.inf) == float
+
+    # params_of_data_type 에서 가져온 후
+    smoothness_param = params_of_data_type.get('smoothness')
+
+    if not isinstance(smoothness_param, dict):
+        raise ValueError(
+            "‘smoothness’ must be a dict with keys "
+            "{'age_start', 'amount', 'age_end'}"
+        )
+
+    required_keys = {'age_start', 'amount', 'age_end'}
+    if set(smoothness_param.keys()) != required_keys:
+        raise ValueError(
+            "‘smoothness’ dict must contain exactly the keys "
+            f"{required_keys}, but got {set(smoothness_param.keys())}"
+        )
+
+    amount = smoothness_param['amount']
+
+    if isinstance(amount, (int, float)):
+        smoothing = float(amount)
+
+    elif isinstance(amount, str):
+        if amount not in smooth_map:
+            raise ValueError(
+                f"Invalid smoothness amount '{amount}'. "
+                f"Expected one of {list(smooth_map.keys())}."
+            )
+        smoothing = smooth_map[amount]
+
+    else:
+        raise TypeError(
+            f"‘amount’ must be int, float, or one of {list(smooth_map.keys())}, "
+            f"got {type(amount).__name__}"
+        )
+        
     pm_model.shared_data['smoothing'] = smoothing # NOTE: smoothing is eventually just a float like 0.5
 
     ############# 5. Check Standard Deviation and Effective Sample Size for likelihood.* #######################################
@@ -564,11 +593,11 @@ def predict_for(
     idata, 
     root_area           = 'Global',
     root_sex            = 'Both',
-    root_year           = 2009,
+    root_year           = 'all',
     area                = 'Global',
     sex                 = 'Female',
     year                = 2005,
-    population_weighted = 1.0,
+    population_weighted = True,
     lower               = 0.0,
     upper               = 1.0,
     include_covariates  = True,
@@ -590,20 +619,19 @@ def predict_for(
 
 
     arr = idata.posterior['constrained_mu_age_p'].values
-    n_chain, n_draw, n_ages = arr.shape                 # (4, 2000, 93)
-    mu_trace = arr.reshape((n_chain * n_draw, n_ages))  # shape = (n_samples, n_ages) -> (8000, 93)
+    n_chain, n_draw, n_ages = arr.shape                 # (4, 2000, 101)
+    mu_trace = arr.reshape((n_chain * n_draw, n_ages))  # shape = (n_samples, n_ages) -> (8000, 101)
     n_samples = mu_trace.shape[0]
 
     if not include_covariates:
         return np.clip(mu_trace, lower, upper)
 
-    # Alpha_trace (random effects)
+    # alpha_trace (random effects)
     alpha_trace = np.empty((n_samples, 0))
     if isinstance(alpha, list) and alpha:
         traces = []
         for alpha_node, sigma_const in zip(alpha, const_alpha_sigma):
             name_alpha = alpha_node.name
-            # print(name_alpha) 
             if name_alpha in idata.posterior:
                 arr_a = idata.posterior[name_alpha].values  # (chains, draws)
                 traces.append(arr_a.reshape(n_chain * n_draw))

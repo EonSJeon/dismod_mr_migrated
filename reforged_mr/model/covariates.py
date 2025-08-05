@@ -83,21 +83,19 @@ def build_random_effects_matrix(
         and (1 <= U[c].sum() < n or c in keep_consts)
     ]
     U = U[cols].copy()
-    print(U)
     
     # 4) Build and apply centering shift so reference area has net zero effect
     path_to_ref = set(nx.shortest_path(region_id_graph, global_id, root_area_id))
     shifts = {c: 1.0 if c in path_to_ref else 0.0 for c in U.columns}
     U_ref = pd.Series(shifts, index=U.columns)
     U = U.sub(U_ref, axis=1) # subtract U_shift from each row of U
-    print(U_ref)
     return U, U_ref
 
 
 def build_sigma_alpha(
     data_type: str,
     parameters: Dict[str, Any],
-    max_depth: int = 5
+    max_depth: int = 4
 ) -> List[Any]:
     """
     Generate hierarchical sigma_alpha priors via MyTruncatedNormal,
@@ -152,7 +150,7 @@ def build_alpha(
     # U에 컬럼이 없으면 바로 반환
     if U.shape[1] == 0:
         return alpha, const_alpha_sigma, alpha_potentials
-
+    
     # 1) 각 컬럼(node)에 대응하는 sigma_alpha[level] 값 추출
     sigma_list = [
         sigma_alpha[region_id_graph.nodes[c]['level']]

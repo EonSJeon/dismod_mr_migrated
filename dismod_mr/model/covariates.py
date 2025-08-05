@@ -113,7 +113,7 @@ def build_random_effects_matrix(
 def build_sigma_alpha(
     data_type: str,
     parameters: Dict[str, Any],
-    max_depth: int = 5
+    max_depth: int = 3
 ) -> List[Any]:
     """
     Generate hierarchical sigma_alpha priors via MyTruncatedNormal,
@@ -432,14 +432,6 @@ def dispersion_covariate_model(
         delta 하한 (양수)
     delta_ub : float
         delta 상한 (양수)
-
-    Returns
-    -------
-    Dict[str, Any]
-        - eta   : [Uniform RV on log(delta)]
-        - Z     : DataFrame slice of z_* covariates (원본 DataFrame에서 복사본)
-        - zeta  : [Normal RV vector]  # Z가 있을 때만 반환
-        - delta : [Deterministic]      # exp(eta + Z @ zeta) 또는 exp(eta) * ones
     """
     # ─── 0) 현재 PyMC 모델 컨텍스트를 가져와야 합니다 ─────────────────────────
     model = pm.modelcontext(None)

@@ -30,10 +30,10 @@ def level_constraints(unconstrained_mu_age: at.TensorVariable):
     Hard-clip unconstrained_mu_age outside [before, after] to a fixed value,
     then softly penalize deviation from the original in between.
     """
-    model      = pm.modelcontext(None) # reforged_mr - level_constraints()
-    label      = model.shared_data["data_type"]
-    ages       = model.shared_data["ages"]
-    params     = model.shared_data["params_of_data_type"]
+    pm_model      = pm.modelcontext(None) # reforged_mr - level_constraints()
+    label      = pm_model.shared_data["data_type"]
+    ages       = pm_model.shared_data["ages"]
+    params     = pm_model.shared_data["params_of_data_type"]
     # exit if no level constraints provided
     if not ("level_value" in params and "level_bounds" in params):
         return unconstrained_mu_age, unconstrained_mu_age, None
@@ -51,7 +51,7 @@ def level_constraints(unconstrained_mu_age: at.TensorVariable):
     clipped = at.switch(idx < start, val,
                 at.switch(idx > end, val, unconstrained_mu_age))
     
-    model.add_coord("age", ages)
+    pm_model.add_coord("age", ages)
     constrained_mu_age = pm.Deterministic(name=f"constrained_mu_age_{label}", var=at.clip(clipped, lb, ub), dims=("age",))
     # add similarity potential back to the raw curve
     similar(
