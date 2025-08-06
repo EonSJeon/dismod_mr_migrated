@@ -11,6 +11,8 @@ import arviz as az
 import warnings
 import matplotlib.pyplot as plt
 import random
+import geopandas as gpd
+import matplotlib.pyplot as plt
 
 import model.spline as spline
 print(spline.__file__)
@@ -746,6 +748,86 @@ def predict_for(
     preds = mu_trace * cov_shift[:, None]  # shape = (n_samples, n_ages)
     return np.clip(preds, lower, upper)
 
+
+
+
+def world_map(
+    pm_model,
+    idata,
+    detailed_pop_path,
+    year,
+    ages_of_interest,
+    output_csv_path     
+):
+    # ages_of_interest 는 list(range(30,101))
+    parameters       = pm_model.shared_data['parameters']
+    ages             = np.array(parameters['ages'], dtype=np.float64)
+    detailed_pop     = pd.read_csv(detailed_pop_path)
+    region_id_graph  = pm_model.shared_data['region_id_graph']
+    id_to_name       = pm_model.shared_data['id_to_name']
+
+    # level == 3 노드만
+    level3_nodes     = [
+        node for node, data in region_id_graph.nodes(data=True)
+        if data.get('level', None) == 3
+    ]
+    level3_id_to_name = {nid: id_to_name[nid] for nid in level3_nodes}
+
+    # ages 배열에서 ages_of_interest 에 해당하는 인덱스
+    age_mask    = np.isin(ages, ages_of_interest)
+    age_indices = np.where(age_mask)[0]
+
+    # node별 샘플별 유병율 저장
+    prevs_area = {}
+
+    for node_id in level3_nodes:
+        area = level3_id_to_name[node_id]
+
+        # detailed_pop 필터링 및 비율 계산
+        dp_node = detailed_pop.loc[
+            (detailed_pop['location_id'] == node_id) &
+            (detailed_pop['age'].isin(ages_of_interest)),
+            ['age', 'val']
+        ].copy()
+        total_pop = dp_node['val'].sum()
+        dp_node['prop'] = dp_node['val'] / total_pop
+
+        # predict_for 호출
+        pred = predict_for(
+            pm_model, idata,
+            root_area           = 'Global',
+            root_sex            = 'Both',
+            root_year           = 'all',
+            area                = area,
+            sex                 = 'Both',
+            year                = year,
+            population_weighted = True,
+            lower               = 0.0,
+            upper               = 1.0,
+            include_covariates  = True,
+        )
+        # ages_of_interest 만 추출해서 가중평균
+        pred_sub = pred[:, age_indices]
+        age_to_prop = dp_node.set_index('age')['prop'].to_dict()
+
+        weights = np.array([
+            age_to_prop.get(int(a), 0.0) for a in ages[age_indices]
+        ], dtype=np.float64)
+        
+        prevs_area[area] = np.dot(pred_sub, weights)
+
+    # CSV로 저장할 DataFrame 생성
+    df_prev = pd.DataFrame({
+        'region': list(prevs_area.keys()),
+        'mean_prev': [vals.mean() for vals in prevs_area.values()]
+    })
+
+    df_prev.to_csv(output_csv_path, index=False)
+    print(f"Saved regional prevalence to '{output_csv_path}'")
+
+    return prevs_area
+
+    
 
 def visualize_pred(pred, data):
     plt.figure(figsize=(10, 4))
