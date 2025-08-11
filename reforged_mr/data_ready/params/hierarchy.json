@@ -1,0 +1,2798 @@
+{
+  "nodes": [
+    [
+      "1",
+      {
+        "location_name": "Global",
+        "level": 0,
+        "parent_id": 1
+      }
+    ],
+    [
+      "31",
+      {
+        "location_name": "Central Europe, Eastern Europe, and Central Asia",
+        "level": 1,
+        "parent_id": 1
+      }
+    ],
+    [
+      "32",
+      {
+        "location_name": "Central Asia",
+        "level": 2,
+        "parent_id": 31
+      }
+    ],
+    [
+      "33",
+      {
+        "location_name": "Armenia",
+        "level": 3,
+        "parent_id": 32
+      }
+    ],
+    [
+      "34",
+      {
+        "location_name": "Azerbaijan",
+        "level": 3,
+        "parent_id": 32
+      }
+    ],
+    [
+      "35",
+      {
+        "location_name": "Georgia",
+        "level": 3,
+        "parent_id": 32
+      }
+    ],
+    [
+      "36",
+      {
+        "location_name": "Kazakhstan",
+        "level": 3,
+        "parent_id": 32
+      }
+    ],
+    [
+      "37",
+      {
+        "location_name": "Kyrgyzstan",
+        "level": 3,
+        "parent_id": 32
+      }
+    ],
+    [
+      "38",
+      {
+        "location_name": "Mongolia",
+        "level": 3,
+        "parent_id": 32
+      }
+    ],
+    [
+      "39",
+      {
+        "location_name": "Tajikistan",
+        "level": 3,
+        "parent_id": 32
+      }
+    ],
+    [
+      "40",
+      {
+        "location_name": "Turkmenistan",
+        "level": 3,
+        "parent_id": 32
+      }
+    ],
+    [
+      "41",
+      {
+        "location_name": "Uzbekistan",
+        "level": 3,
+        "parent_id": 32
+      }
+    ],
+    [
+      "42",
+      {
+        "location_name": "Central Europe",
+        "level": 2,
+        "parent_id": 31
+      }
+    ],
+    [
+      "43",
+      {
+        "location_name": "Albania",
+        "level": 3,
+        "parent_id": 42
+      }
+    ],
+    [
+      "44",
+      {
+        "location_name": "Bosnia and Herzegovina",
+        "level": 3,
+        "parent_id": 42
+      }
+    ],
+    [
+      "45",
+      {
+        "location_name": "Bulgaria",
+        "level": 3,
+        "parent_id": 42
+      }
+    ],
+    [
+      "46",
+      {
+        "location_name": "Croatia",
+        "level": 3,
+        "parent_id": 42
+      }
+    ],
+    [
+      "47",
+      {
+        "location_name": "Czechia",
+        "level": 3,
+        "parent_id": 42
+      }
+    ],
+    [
+      "48",
+      {
+        "location_name": "Hungary",
+        "level": 3,
+        "parent_id": 42
+      }
+    ],
+    [
+      "50",
+      {
+        "location_name": "Montenegro",
+        "level": 3,
+        "parent_id": 42
+      }
+    ],
+    [
+      "49",
+      {
+        "location_name": "North Macedonia",
+        "level": 3,
+        "parent_id": 42
+      }
+    ],
+    [
+      "51",
+      {
+        "location_name": "Poland",
+        "level": 3,
+        "parent_id": 42
+      }
+    ],
+    [
+      "52",
+      {
+        "location_name": "Romania",
+        "level": 3,
+        "parent_id": 42
+      }
+    ],
+    [
+      "53",
+      {
+        "location_name": "Serbia",
+        "level": 3,
+        "parent_id": 42
+      }
+    ],
+    [
+      "54",
+      {
+        "location_name": "Slovakia",
+        "level": 3,
+        "parent_id": 42
+      }
+    ],
+    [
+      "55",
+      {
+        "location_name": "Slovenia",
+        "level": 3,
+        "parent_id": 42
+      }
+    ],
+    [
+      "56",
+      {
+        "location_name": "Eastern Europe",
+        "level": 2,
+        "parent_id": 31
+      }
+    ],
+    [
+      "57",
+      {
+        "location_name": "Belarus",
+        "level": 3,
+        "parent_id": 56
+      }
+    ],
+    [
+      "58",
+      {
+        "location_name": "Estonia",
+        "level": 3,
+        "parent_id": 56
+      }
+    ],
+    [
+      "59",
+      {
+        "location_name": "Latvia",
+        "level": 3,
+        "parent_id": 56
+      }
+    ],
+    [
+      "60",
+      {
+        "location_name": "Lithuania",
+        "level": 3,
+        "parent_id": 56
+      }
+    ],
+    [
+      "61",
+      {
+        "location_name": "Republic of Moldova",
+        "level": 3,
+        "parent_id": 56
+      }
+    ],
+    [
+      "62",
+      {
+        "location_name": "Russian Federation",
+        "level": 3,
+        "parent_id": 56
+      }
+    ],
+    [
+      "63",
+      {
+        "location_name": "Ukraine",
+        "level": 3,
+        "parent_id": 56
+      }
+    ],
+    [
+      "64",
+      {
+        "location_name": "High-income",
+        "level": 1,
+        "parent_id": 1
+      }
+    ],
+    [
+      "70",
+      {
+        "location_name": "Australasia",
+        "level": 2,
+        "parent_id": 64
+      }
+    ],
+    [
+      "71",
+      {
+        "location_name": "Australia",
+        "level": 3,
+        "parent_id": 70
+      }
+    ],
+    [
+      "72",
+      {
+        "location_name": "New Zealand",
+        "level": 3,
+        "parent_id": 70
+      }
+    ],
+    [
+      "65",
+      {
+        "location_name": "High-income Asia Pacific",
+        "level": 2,
+        "parent_id": 64
+      }
+    ],
+    [
+      "66",
+      {
+        "location_name": "Brunei Darussalam",
+        "level": 3,
+        "parent_id": 65
+      }
+    ],
+    [
+      "67",
+      {
+        "location_name": "Japan",
+        "level": 3,
+        "parent_id": 65
+      }
+    ],
+    [
+      "68",
+      {
+        "location_name": "Republic of Korea",
+        "level": 3,
+        "parent_id": 65
+      }
+    ],
+    [
+      "69",
+      {
+        "location_name": "Singapore",
+        "level": 3,
+        "parent_id": 65
+      }
+    ],
+    [
+      "100",
+      {
+        "location_name": "High-income North America",
+        "level": 2,
+        "parent_id": 64
+      }
+    ],
+    [
+      "101",
+      {
+        "location_name": "Canada",
+        "level": 3,
+        "parent_id": 100
+      }
+    ],
+    [
+      "349",
+      {
+        "location_name": "Greenland",
+        "level": 3,
+        "parent_id": 100
+      }
+    ],
+    [
+      "102",
+      {
+        "location_name": "United States of America",
+        "level": 3,
+        "parent_id": 100
+      }
+    ],
+    [
+      "96",
+      {
+        "location_name": "Southern Latin America",
+        "level": 2,
+        "parent_id": 64
+      }
+    ],
+    [
+      "97",
+      {
+        "location_name": "Argentina",
+        "level": 3,
+        "parent_id": 96
+      }
+    ],
+    [
+      "98",
+      {
+        "location_name": "Chile",
+        "level": 3,
+        "parent_id": 96
+      }
+    ],
+    [
+      "99",
+      {
+        "location_name": "Uruguay",
+        "level": 3,
+        "parent_id": 96
+      }
+    ],
+    [
+      "73",
+      {
+        "location_name": "Western Europe",
+        "level": 2,
+        "parent_id": 64
+      }
+    ],
+    [
+      "74",
+      {
+        "location_name": "Andorra",
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "75",
+      {
+        "location_name": "Austria",
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "76",
+      {
+        "location_name": "Belgium",
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "77",
+      {
+        "location_name": "Cyprus",
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "78",
+      {
+        "location_name": "Denmark",
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "79",
+      {
+        "location_name": "Finland",
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "80",
+      {
+        "location_name": "France",
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "81",
+      {
+        "location_name": "Germany",
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "82",
+      {
+        "location_name": "Greece",
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "83",
+      {
+        "location_name": "Iceland",
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "84",
+      {
+        "location_name": "Ireland",
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "85",
+      {
+        "location_name": "Israel",
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "86",
+      {
+        "location_name": "Italy",
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "87",
+      {
+        "location_name": "Luxembourg",
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "88",
+      {
+        "location_name": "Malta",
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "367",
+      {
+        "location_name": "Monaco",
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "89",
+      {
+        "location_name": "Netherlands",
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "90",
+      {
+        "location_name": "Norway",
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "91",
+      {
+        "location_name": "Portugal",
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "396",
+      {
+        "location_name": "San Marino",
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "92",
+      {
+        "location_name": "Spain",
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "93",
+      {
+        "location_name": "Sweden",
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "94",
+      {
+        "location_name": "Switzerland",
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "95",
+      {
+        "location_name": "United Kingdom",
+        "level": 3,
+        "parent_id": 73
+      }
+    ],
+    [
+      "103",
+      {
+        "location_name": "Latin America and Caribbean",
+        "level": 1,
+        "parent_id": 1
+      }
+    ],
+    [
+      "120",
+      {
+        "location_name": "Andean Latin America",
+        "level": 2,
+        "parent_id": 103
+      }
+    ],
+    [
+      "121",
+      {
+        "location_name": "Bolivia (Plurinational State of)",
+        "level": 3,
+        "parent_id": 120
+      }
+    ],
+    [
+      "122",
+      {
+        "location_name": "Ecuador",
+        "level": 3,
+        "parent_id": 120
+      }
+    ],
+    [
+      "123",
+      {
+        "location_name": "Peru",
+        "level": 3,
+        "parent_id": 120
+      }
+    ],
+    [
+      "104",
+      {
+        "location_name": "Caribbean",
+        "level": 2,
+        "parent_id": 103
+      }
+    ],
+    [
+      "105",
+      {
+        "location_name": "Antigua and Barbuda",
+        "level": 3,
+        "parent_id": 104
+      }
+    ],
+    [
+      "106",
+      {
+        "location_name": "Bahamas",
+        "level": 3,
+        "parent_id": 104
+      }
+    ],
+    [
+      "107",
+      {
+        "location_name": "Barbados",
+        "level": 3,
+        "parent_id": 104
+      }
+    ],
+    [
+      "108",
+      {
+        "location_name": "Belize",
+        "level": 3,
+        "parent_id": 104
+      }
+    ],
+    [
+      "305",
+      {
+        "location_name": "Bermuda",
+        "level": 3,
+        "parent_id": 104
+      }
+    ],
+    [
+      "109",
+      {
+        "location_name": "Cuba",
+        "level": 3,
+        "parent_id": 104
+      }
+    ],
+    [
+      "110",
+      {
+        "location_name": "Dominica",
+        "level": 3,
+        "parent_id": 104
+      }
+    ],
+    [
+      "111",
+      {
+        "location_name": "Dominican Republic",
+        "level": 3,
+        "parent_id": 104
+      }
+    ],
+    [
+      "112",
+      {
+        "location_name": "Grenada",
+        "level": 3,
+        "parent_id": 104
+      }
+    ],
+    [
+      "113",
+      {
+        "location_name": "Guyana",
+        "level": 3,
+        "parent_id": 104
+      }
+    ],
+    [
+      "114",
+      {
+        "location_name": "Haiti",
+        "level": 3,
+        "parent_id": 104
+      }
+    ],
+    [
+      "115",
+      {
+        "location_name": "Jamaica",
+        "level": 3,
+        "parent_id": 104
+      }
+    ],
+    [
+      "385",
+      {
+        "location_name": "Puerto Rico",
+        "level": 3,
+        "parent_id": 104
+      }
+    ],
+    [
+      "393",
+      {
+        "location_name": "Saint Kitts and Nevis",
+        "level": 3,
+        "parent_id": 104
+      }
+    ],
+    [
+      "116",
+      {
+        "location_name": "Saint Lucia",
+        "level": 3,
+        "parent_id": 104
+      }
+    ],
+    [
+      "117",
+      {
+        "location_name": "Saint Vincent and the Grenadines",
+        "level": 3,
+        "parent_id": 104
+      }
+    ],
+    [
+      "118",
+      {
+        "location_name": "Suriname",
+        "level": 3,
+        "parent_id": 104
+      }
+    ],
+    [
+      "119",
+      {
+        "location_name": "Trinidad and Tobago",
+        "level": 3,
+        "parent_id": 104
+      }
+    ],
+    [
+      "422",
+      {
+        "location_name": "United States Virgin Islands",
+        "level": 3,
+        "parent_id": 104
+      }
+    ],
+    [
+      "124",
+      {
+        "location_name": "Central Latin America",
+        "level": 2,
+        "parent_id": 103
+      }
+    ],
+    [
+      "125",
+      {
+        "location_name": "Colombia",
+        "level": 3,
+        "parent_id": 124
+      }
+    ],
+    [
+      "126",
+      {
+        "location_name": "Costa Rica",
+        "level": 3,
+        "parent_id": 124
+      }
+    ],
+    [
+      "127",
+      {
+        "location_name": "El Salvador",
+        "level": 3,
+        "parent_id": 124
+      }
+    ],
+    [
+      "128",
+      {
+        "location_name": "Guatemala",
+        "level": 3,
+        "parent_id": 124
+      }
+    ],
+    [
+      "129",
+      {
+        "location_name": "Honduras",
+        "level": 3,
+        "parent_id": 124
+      }
+    ],
+    [
+      "130",
+      {
+        "location_name": "Mexico",
+        "level": 3,
+        "parent_id": 124
+      }
+    ],
+    [
+      "131",
+      {
+        "location_name": "Nicaragua",
+        "level": 3,
+        "parent_id": 124
+      }
+    ],
+    [
+      "132",
+      {
+        "location_name": "Panama",
+        "level": 3,
+        "parent_id": 124
+      }
+    ],
+    [
+      "133",
+      {
+        "location_name": "Venezuela (Bolivarian Republic of)",
+        "level": 3,
+        "parent_id": 124
+      }
+    ],
+    [
+      "134",
+      {
+        "location_name": "Tropical Latin America",
+        "level": 2,
+        "parent_id": 103
+      }
+    ],
+    [
+      "135",
+      {
+        "location_name": "Brazil",
+        "level": 3,
+        "parent_id": 134
+      }
+    ],
+    [
+      "136",
+      {
+        "location_name": "Paraguay",
+        "level": 3,
+        "parent_id": 134
+      }
+    ],
+    [
+      "137",
+      {
+        "location_name": "North Africa and Middle East",
+        "level": 1,
+        "parent_id": 1
+      }
+    ],
+    [
+      "138",
+      {
+        "location_name": "North Africa and Middle East",
+        "level": 2,
+        "parent_id": 137
+      }
+    ],
+    [
+      "160",
+      {
+        "location_name": "Afghanistan",
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "139",
+      {
+        "location_name": "Algeria",
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "140",
+      {
+        "location_name": "Bahrain",
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "141",
+      {
+        "location_name": "Egypt",
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "142",
+      {
+        "location_name": "Iran (Islamic Republic of)",
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "143",
+      {
+        "location_name": "Iraq",
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "144",
+      {
+        "location_name": "Jordan",
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "145",
+      {
+        "location_name": "Kuwait",
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "146",
+      {
+        "location_name": "Lebanon",
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "147",
+      {
+        "location_name": "Libya",
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "148",
+      {
+        "location_name": "Morocco",
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "150",
+      {
+        "location_name": "Oman",
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "149",
+      {
+        "location_name": "Palestine",
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "151",
+      {
+        "location_name": "Qatar",
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "152",
+      {
+        "location_name": "Saudi Arabia",
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "522",
+      {
+        "location_name": "Sudan",
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "153",
+      {
+        "location_name": "Syrian Arab Republic",
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "154",
+      {
+        "location_name": "Tunisia",
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "155",
+      {
+        "location_name": "Türkiye",
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "156",
+      {
+        "location_name": "United Arab Emirates",
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "157",
+      {
+        "location_name": "Yemen",
+        "level": 3,
+        "parent_id": 138
+      }
+    ],
+    [
+      "158",
+      {
+        "location_name": "South Asia",
+        "level": 1,
+        "parent_id": 1
+      }
+    ],
+    [
+      "159",
+      {
+        "location_name": "South Asia",
+        "level": 2,
+        "parent_id": 158
+      }
+    ],
+    [
+      "161",
+      {
+        "location_name": "Bangladesh",
+        "level": 3,
+        "parent_id": 159
+      }
+    ],
+    [
+      "162",
+      {
+        "location_name": "Bhutan",
+        "level": 3,
+        "parent_id": 159
+      }
+    ],
+    [
+      "163",
+      {
+        "location_name": "India",
+        "level": 3,
+        "parent_id": 159
+      }
+    ],
+    [
+      "164",
+      {
+        "location_name": "Nepal",
+        "level": 3,
+        "parent_id": 159
+      }
+    ],
+    [
+      "165",
+      {
+        "location_name": "Pakistan",
+        "level": 3,
+        "parent_id": 159
+      }
+    ],
+    [
+      "4",
+      {
+        "location_name": "Southeast Asia, East Asia, and Oceania",
+        "level": 1,
+        "parent_id": 1
+      }
+    ],
+    [
+      "5",
+      {
+        "location_name": "East Asia",
+        "level": 2,
+        "parent_id": 4
+      }
+    ],
+    [
+      "6",
+      {
+        "location_name": "China",
+        "level": 3,
+        "parent_id": 5
+      }
+    ],
+    [
+      "7",
+      {
+        "location_name": "Democratic People's Republic of Korea",
+        "level": 3,
+        "parent_id": 5
+      }
+    ],
+    [
+      "8",
+      {
+        "location_name": "Taiwan (Province of China)",
+        "level": 3,
+        "parent_id": 5
+      }
+    ],
+    [
+      "21",
+      {
+        "location_name": "Oceania",
+        "level": 2,
+        "parent_id": 4
+      }
+    ],
+    [
+      "298",
+      {
+        "location_name": "American Samoa",
+        "level": 3,
+        "parent_id": 21
+      }
+    ],
+    [
+      "320",
+      {
+        "location_name": "Cook Islands",
+        "level": 3,
+        "parent_id": 21
+      }
+    ],
+    [
+      "22",
+      {
+        "location_name": "Fiji",
+        "level": 3,
+        "parent_id": 21
+      }
+    ],
+    [
+      "351",
+      {
+        "location_name": "Guam",
+        "level": 3,
+        "parent_id": 21
+      }
+    ],
+    [
+      "23",
+      {
+        "location_name": "Kiribati",
+        "level": 3,
+        "parent_id": 21
+      }
+    ],
+    [
+      "24",
+      {
+        "location_name": "Marshall Islands",
+        "level": 3,
+        "parent_id": 21
+      }
+    ],
+    [
+      "25",
+      {
+        "location_name": "Micronesia (Federated States of)",
+        "level": 3,
+        "parent_id": 21
+      }
+    ],
+    [
+      "369",
+      {
+        "location_name": "Nauru",
+        "level": 3,
+        "parent_id": 21
+      }
+    ],
+    [
+      "374",
+      {
+        "location_name": "Niue",
+        "level": 3,
+        "parent_id": 21
+      }
+    ],
+    [
+      "376",
+      {
+        "location_name": "Northern Mariana Islands",
+        "level": 3,
+        "parent_id": 21
+      }
+    ],
+    [
+      "380",
+      {
+        "location_name": "Palau",
+        "level": 3,
+        "parent_id": 21
+      }
+    ],
+    [
+      "26",
+      {
+        "location_name": "Papua New Guinea",
+        "level": 3,
+        "parent_id": 21
+      }
+    ],
+    [
+      "27",
+      {
+        "location_name": "Samoa",
+        "level": 3,
+        "parent_id": 21
+      }
+    ],
+    [
+      "28",
+      {
+        "location_name": "Solomon Islands",
+        "level": 3,
+        "parent_id": 21
+      }
+    ],
+    [
+      "413",
+      {
+        "location_name": "Tokelau",
+        "level": 3,
+        "parent_id": 21
+      }
+    ],
+    [
+      "29",
+      {
+        "location_name": "Tonga",
+        "level": 3,
+        "parent_id": 21
+      }
+    ],
+    [
+      "416",
+      {
+        "location_name": "Tuvalu",
+        "level": 3,
+        "parent_id": 21
+      }
+    ],
+    [
+      "30",
+      {
+        "location_name": "Vanuatu",
+        "level": 3,
+        "parent_id": 21
+      }
+    ],
+    [
+      "9",
+      {
+        "location_name": "Southeast Asia",
+        "level": 2,
+        "parent_id": 4
+      }
+    ],
+    [
+      "10",
+      {
+        "location_name": "Cambodia",
+        "level": 3,
+        "parent_id": 9
+      }
+    ],
+    [
+      "11",
+      {
+        "location_name": "Indonesia",
+        "level": 3,
+        "parent_id": 9
+      }
+    ],
+    [
+      "12",
+      {
+        "location_name": "Lao People's Democratic Republic",
+        "level": 3,
+        "parent_id": 9
+      }
+    ],
+    [
+      "13",
+      {
+        "location_name": "Malaysia",
+        "level": 3,
+        "parent_id": 9
+      }
+    ],
+    [
+      "14",
+      {
+        "location_name": "Maldives",
+        "level": 3,
+        "parent_id": 9
+      }
+    ],
+    [
+      "183",
+      {
+        "location_name": "Mauritius",
+        "level": 3,
+        "parent_id": 9
+      }
+    ],
+    [
+      "15",
+      {
+        "location_name": "Myanmar",
+        "level": 3,
+        "parent_id": 9
+      }
+    ],
+    [
+      "16",
+      {
+        "location_name": "Philippines",
+        "level": 3,
+        "parent_id": 9
+      }
+    ],
+    [
+      "186",
+      {
+        "location_name": "Seychelles",
+        "level": 3,
+        "parent_id": 9
+      }
+    ],
+    [
+      "17",
+      {
+        "location_name": "Sri Lanka",
+        "level": 3,
+        "parent_id": 9
+      }
+    ],
+    [
+      "18",
+      {
+        "location_name": "Thailand",
+        "level": 3,
+        "parent_id": 9
+      }
+    ],
+    [
+      "19",
+      {
+        "location_name": "Timor-Leste",
+        "level": 3,
+        "parent_id": 9
+      }
+    ],
+    [
+      "20",
+      {
+        "location_name": "Viet Nam",
+        "level": 3,
+        "parent_id": 9
+      }
+    ],
+    [
+      "166",
+      {
+        "location_name": "Sub-Saharan Africa",
+        "level": 1,
+        "parent_id": 1
+      }
+    ],
+    [
+      "167",
+      {
+        "location_name": "Central Sub-Saharan Africa",
+        "level": 2,
+        "parent_id": 166
+      }
+    ],
+    [
+      "168",
+      {
+        "location_name": "Angola",
+        "level": 3,
+        "parent_id": 167
+      }
+    ],
+    [
+      "169",
+      {
+        "location_name": "Central African Republic",
+        "level": 3,
+        "parent_id": 167
+      }
+    ],
+    [
+      "170",
+      {
+        "location_name": "Congo",
+        "level": 3,
+        "parent_id": 167
+      }
+    ],
+    [
+      "171",
+      {
+        "location_name": "Democratic Republic of the Congo",
+        "level": 3,
+        "parent_id": 167
+      }
+    ],
+    [
+      "172",
+      {
+        "location_name": "Equatorial Guinea",
+        "level": 3,
+        "parent_id": 167
+      }
+    ],
+    [
+      "173",
+      {
+        "location_name": "Gabon",
+        "level": 3,
+        "parent_id": 167
+      }
+    ],
+    [
+      "174",
+      {
+        "location_name": "Eastern Sub-Saharan Africa",
+        "level": 2,
+        "parent_id": 166
+      }
+    ],
+    [
+      "175",
+      {
+        "location_name": "Burundi",
+        "level": 3,
+        "parent_id": 174
+      }
+    ],
+    [
+      "176",
+      {
+        "location_name": "Comoros",
+        "level": 3,
+        "parent_id": 174
+      }
+    ],
+    [
+      "177",
+      {
+        "location_name": "Djibouti",
+        "level": 3,
+        "parent_id": 174
+      }
+    ],
+    [
+      "178",
+      {
+        "location_name": "Eritrea",
+        "level": 3,
+        "parent_id": 174
+      }
+    ],
+    [
+      "179",
+      {
+        "location_name": "Ethiopia",
+        "level": 3,
+        "parent_id": 174
+      }
+    ],
+    [
+      "180",
+      {
+        "location_name": "Kenya",
+        "level": 3,
+        "parent_id": 174
+      }
+    ],
+    [
+      "181",
+      {
+        "location_name": "Madagascar",
+        "level": 3,
+        "parent_id": 174
+      }
+    ],
+    [
+      "182",
+      {
+        "location_name": "Malawi",
+        "level": 3,
+        "parent_id": 174
+      }
+    ],
+    [
+      "184",
+      {
+        "location_name": "Mozambique",
+        "level": 3,
+        "parent_id": 174
+      }
+    ],
+    [
+      "185",
+      {
+        "location_name": "Rwanda",
+        "level": 3,
+        "parent_id": 174
+      }
+    ],
+    [
+      "187",
+      {
+        "location_name": "Somalia",
+        "level": 3,
+        "parent_id": 174
+      }
+    ],
+    [
+      "435",
+      {
+        "location_name": "South Sudan",
+        "level": 3,
+        "parent_id": 174
+      }
+    ],
+    [
+      "190",
+      {
+        "location_name": "Uganda",
+        "level": 3,
+        "parent_id": 174
+      }
+    ],
+    [
+      "189",
+      {
+        "location_name": "United Republic of Tanzania",
+        "level": 3,
+        "parent_id": 174
+      }
+    ],
+    [
+      "191",
+      {
+        "location_name": "Zambia",
+        "level": 3,
+        "parent_id": 174
+      }
+    ],
+    [
+      "192",
+      {
+        "location_name": "Southern Sub-Saharan Africa",
+        "level": 2,
+        "parent_id": 166
+      }
+    ],
+    [
+      "193",
+      {
+        "location_name": "Botswana",
+        "level": 3,
+        "parent_id": 192
+      }
+    ],
+    [
+      "197",
+      {
+        "location_name": "Eswatini",
+        "level": 3,
+        "parent_id": 192
+      }
+    ],
+    [
+      "194",
+      {
+        "location_name": "Lesotho",
+        "level": 3,
+        "parent_id": 192
+      }
+    ],
+    [
+      "195",
+      {
+        "location_name": "Namibia",
+        "level": 3,
+        "parent_id": 192
+      }
+    ],
+    [
+      "196",
+      {
+        "location_name": "South Africa",
+        "level": 3,
+        "parent_id": 192
+      }
+    ],
+    [
+      "198",
+      {
+        "location_name": "Zimbabwe",
+        "level": 3,
+        "parent_id": 192
+      }
+    ],
+    [
+      "199",
+      {
+        "location_name": "Western Sub-Saharan Africa",
+        "level": 2,
+        "parent_id": 166
+      }
+    ],
+    [
+      "200",
+      {
+        "location_name": "Benin",
+        "level": 3,
+        "parent_id": 199
+      }
+    ],
+    [
+      "201",
+      {
+        "location_name": "Burkina Faso",
+        "level": 3,
+        "parent_id": 199
+      }
+    ],
+    [
+      "203",
+      {
+        "location_name": "Cabo Verde",
+        "level": 3,
+        "parent_id": 199
+      }
+    ],
+    [
+      "202",
+      {
+        "location_name": "Cameroon",
+        "level": 3,
+        "parent_id": 199
+      }
+    ],
+    [
+      "204",
+      {
+        "location_name": "Chad",
+        "level": 3,
+        "parent_id": 199
+      }
+    ],
+    [
+      "205",
+      {
+        "location_name": "Côte d'Ivoire",
+        "level": 3,
+        "parent_id": 199
+      }
+    ],
+    [
+      "206",
+      {
+        "location_name": "Gambia",
+        "level": 3,
+        "parent_id": 199
+      }
+    ],
+    [
+      "207",
+      {
+        "location_name": "Ghana",
+        "level": 3,
+        "parent_id": 199
+      }
+    ],
+    [
+      "208",
+      {
+        "location_name": "Guinea",
+        "level": 3,
+        "parent_id": 199
+      }
+    ],
+    [
+      "209",
+      {
+        "location_name": "Guinea-Bissau",
+        "level": 3,
+        "parent_id": 199
+      }
+    ],
+    [
+      "210",
+      {
+        "location_name": "Liberia",
+        "level": 3,
+        "parent_id": 199
+      }
+    ],
+    [
+      "211",
+      {
+        "location_name": "Mali",
+        "level": 3,
+        "parent_id": 199
+      }
+    ],
+    [
+      "212",
+      {
+        "location_name": "Mauritania",
+        "level": 3,
+        "parent_id": 199
+      }
+    ],
+    [
+      "213",
+      {
+        "location_name": "Niger",
+        "level": 3,
+        "parent_id": 199
+      }
+    ],
+    [
+      "214",
+      {
+        "location_name": "Nigeria",
+        "level": 3,
+        "parent_id": 199
+      }
+    ],
+    [
+      "215",
+      {
+        "location_name": "Sao Tome and Principe",
+        "level": 3,
+        "parent_id": 199
+      }
+    ],
+    [
+      "216",
+      {
+        "location_name": "Senegal",
+        "level": 3,
+        "parent_id": 199
+      }
+    ],
+    [
+      "217",
+      {
+        "location_name": "Sierra Leone",
+        "level": 3,
+        "parent_id": 199
+      }
+    ],
+    [
+      "218",
+      {
+        "location_name": "Togo",
+        "level": 3,
+        "parent_id": 199
+      }
+    ]
+  ],
+  "edges": [
+    [
+      "1",
+      "31"
+    ],
+    [
+      "31",
+      "32"
+    ],
+    [
+      "32",
+      "33"
+    ],
+    [
+      "32",
+      "34"
+    ],
+    [
+      "32",
+      "35"
+    ],
+    [
+      "32",
+      "36"
+    ],
+    [
+      "32",
+      "37"
+    ],
+    [
+      "32",
+      "38"
+    ],
+    [
+      "32",
+      "39"
+    ],
+    [
+      "32",
+      "40"
+    ],
+    [
+      "32",
+      "41"
+    ],
+    [
+      "31",
+      "42"
+    ],
+    [
+      "42",
+      "43"
+    ],
+    [
+      "42",
+      "44"
+    ],
+    [
+      "42",
+      "45"
+    ],
+    [
+      "42",
+      "46"
+    ],
+    [
+      "42",
+      "47"
+    ],
+    [
+      "42",
+      "48"
+    ],
+    [
+      "42",
+      "50"
+    ],
+    [
+      "42",
+      "49"
+    ],
+    [
+      "42",
+      "51"
+    ],
+    [
+      "42",
+      "52"
+    ],
+    [
+      "42",
+      "53"
+    ],
+    [
+      "42",
+      "54"
+    ],
+    [
+      "42",
+      "55"
+    ],
+    [
+      "31",
+      "56"
+    ],
+    [
+      "56",
+      "57"
+    ],
+    [
+      "56",
+      "58"
+    ],
+    [
+      "56",
+      "59"
+    ],
+    [
+      "56",
+      "60"
+    ],
+    [
+      "56",
+      "61"
+    ],
+    [
+      "56",
+      "62"
+    ],
+    [
+      "56",
+      "63"
+    ],
+    [
+      "1",
+      "64"
+    ],
+    [
+      "64",
+      "70"
+    ],
+    [
+      "70",
+      "71"
+    ],
+    [
+      "70",
+      "72"
+    ],
+    [
+      "64",
+      "65"
+    ],
+    [
+      "65",
+      "66"
+    ],
+    [
+      "65",
+      "67"
+    ],
+    [
+      "65",
+      "68"
+    ],
+    [
+      "65",
+      "69"
+    ],
+    [
+      "64",
+      "100"
+    ],
+    [
+      "100",
+      "101"
+    ],
+    [
+      "100",
+      "349"
+    ],
+    [
+      "100",
+      "102"
+    ],
+    [
+      "64",
+      "96"
+    ],
+    [
+      "96",
+      "97"
+    ],
+    [
+      "96",
+      "98"
+    ],
+    [
+      "96",
+      "99"
+    ],
+    [
+      "64",
+      "73"
+    ],
+    [
+      "73",
+      "74"
+    ],
+    [
+      "73",
+      "75"
+    ],
+    [
+      "73",
+      "76"
+    ],
+    [
+      "73",
+      "77"
+    ],
+    [
+      "73",
+      "78"
+    ],
+    [
+      "73",
+      "79"
+    ],
+    [
+      "73",
+      "80"
+    ],
+    [
+      "73",
+      "81"
+    ],
+    [
+      "73",
+      "82"
+    ],
+    [
+      "73",
+      "83"
+    ],
+    [
+      "73",
+      "84"
+    ],
+    [
+      "73",
+      "85"
+    ],
+    [
+      "73",
+      "86"
+    ],
+    [
+      "73",
+      "87"
+    ],
+    [
+      "73",
+      "88"
+    ],
+    [
+      "73",
+      "367"
+    ],
+    [
+      "73",
+      "89"
+    ],
+    [
+      "73",
+      "90"
+    ],
+    [
+      "73",
+      "91"
+    ],
+    [
+      "73",
+      "396"
+    ],
+    [
+      "73",
+      "92"
+    ],
+    [
+      "73",
+      "93"
+    ],
+    [
+      "73",
+      "94"
+    ],
+    [
+      "73",
+      "95"
+    ],
+    [
+      "1",
+      "103"
+    ],
+    [
+      "103",
+      "120"
+    ],
+    [
+      "120",
+      "121"
+    ],
+    [
+      "120",
+      "122"
+    ],
+    [
+      "120",
+      "123"
+    ],
+    [
+      "103",
+      "104"
+    ],
+    [
+      "104",
+      "105"
+    ],
+    [
+      "104",
+      "106"
+    ],
+    [
+      "104",
+      "107"
+    ],
+    [
+      "104",
+      "108"
+    ],
+    [
+      "104",
+      "305"
+    ],
+    [
+      "104",
+      "109"
+    ],
+    [
+      "104",
+      "110"
+    ],
+    [
+      "104",
+      "111"
+    ],
+    [
+      "104",
+      "112"
+    ],
+    [
+      "104",
+      "113"
+    ],
+    [
+      "104",
+      "114"
+    ],
+    [
+      "104",
+      "115"
+    ],
+    [
+      "104",
+      "385"
+    ],
+    [
+      "104",
+      "393"
+    ],
+    [
+      "104",
+      "116"
+    ],
+    [
+      "104",
+      "117"
+    ],
+    [
+      "104",
+      "118"
+    ],
+    [
+      "104",
+      "119"
+    ],
+    [
+      "104",
+      "422"
+    ],
+    [
+      "103",
+      "124"
+    ],
+    [
+      "124",
+      "125"
+    ],
+    [
+      "124",
+      "126"
+    ],
+    [
+      "124",
+      "127"
+    ],
+    [
+      "124",
+      "128"
+    ],
+    [
+      "124",
+      "129"
+    ],
+    [
+      "124",
+      "130"
+    ],
+    [
+      "124",
+      "131"
+    ],
+    [
+      "124",
+      "132"
+    ],
+    [
+      "124",
+      "133"
+    ],
+    [
+      "103",
+      "134"
+    ],
+    [
+      "134",
+      "135"
+    ],
+    [
+      "134",
+      "136"
+    ],
+    [
+      "1",
+      "137"
+    ],
+    [
+      "137",
+      "138"
+    ],
+    [
+      "138",
+      "160"
+    ],
+    [
+      "138",
+      "139"
+    ],
+    [
+      "138",
+      "140"
+    ],
+    [
+      "138",
+      "141"
+    ],
+    [
+      "138",
+      "142"
+    ],
+    [
+      "138",
+      "143"
+    ],
+    [
+      "138",
+      "144"
+    ],
+    [
+      "138",
+      "145"
+    ],
+    [
+      "138",
+      "146"
+    ],
+    [
+      "138",
+      "147"
+    ],
+    [
+      "138",
+      "148"
+    ],
+    [
+      "138",
+      "150"
+    ],
+    [
+      "138",
+      "149"
+    ],
+    [
+      "138",
+      "151"
+    ],
+    [
+      "138",
+      "152"
+    ],
+    [
+      "138",
+      "522"
+    ],
+    [
+      "138",
+      "153"
+    ],
+    [
+      "138",
+      "154"
+    ],
+    [
+      "138",
+      "155"
+    ],
+    [
+      "138",
+      "156"
+    ],
+    [
+      "138",
+      "157"
+    ],
+    [
+      "1",
+      "158"
+    ],
+    [
+      "158",
+      "159"
+    ],
+    [
+      "159",
+      "161"
+    ],
+    [
+      "159",
+      "162"
+    ],
+    [
+      "159",
+      "163"
+    ],
+    [
+      "159",
+      "164"
+    ],
+    [
+      "159",
+      "165"
+    ],
+    [
+      "1",
+      "4"
+    ],
+    [
+      "4",
+      "5"
+    ],
+    [
+      "5",
+      "6"
+    ],
+    [
+      "5",
+      "7"
+    ],
+    [
+      "5",
+      "8"
+    ],
+    [
+      "4",
+      "21"
+    ],
+    [
+      "21",
+      "298"
+    ],
+    [
+      "21",
+      "320"
+    ],
+    [
+      "21",
+      "22"
+    ],
+    [
+      "21",
+      "351"
+    ],
+    [
+      "21",
+      "23"
+    ],
+    [
+      "21",
+      "24"
+    ],
+    [
+      "21",
+      "25"
+    ],
+    [
+      "21",
+      "369"
+    ],
+    [
+      "21",
+      "374"
+    ],
+    [
+      "21",
+      "376"
+    ],
+    [
+      "21",
+      "380"
+    ],
+    [
+      "21",
+      "26"
+    ],
+    [
+      "21",
+      "27"
+    ],
+    [
+      "21",
+      "28"
+    ],
+    [
+      "21",
+      "413"
+    ],
+    [
+      "21",
+      "29"
+    ],
+    [
+      "21",
+      "416"
+    ],
+    [
+      "21",
+      "30"
+    ],
+    [
+      "4",
+      "9"
+    ],
+    [
+      "9",
+      "10"
+    ],
+    [
+      "9",
+      "11"
+    ],
+    [
+      "9",
+      "12"
+    ],
+    [
+      "9",
+      "13"
+    ],
+    [
+      "9",
+      "14"
+    ],
+    [
+      "9",
+      "183"
+    ],
+    [
+      "9",
+      "15"
+    ],
+    [
+      "9",
+      "16"
+    ],
+    [
+      "9",
+      "186"
+    ],
+    [
+      "9",
+      "17"
+    ],
+    [
+      "9",
+      "18"
+    ],
+    [
+      "9",
+      "19"
+    ],
+    [
+      "9",
+      "20"
+    ],
+    [
+      "1",
+      "166"
+    ],
+    [
+      "166",
+      "167"
+    ],
+    [
+      "167",
+      "168"
+    ],
+    [
+      "167",
+      "169"
+    ],
+    [
+      "167",
+      "170"
+    ],
+    [
+      "167",
+      "171"
+    ],
+    [
+      "167",
+      "172"
+    ],
+    [
+      "167",
+      "173"
+    ],
+    [
+      "166",
+      "174"
+    ],
+    [
+      "174",
+      "175"
+    ],
+    [
+      "174",
+      "176"
+    ],
+    [
+      "174",
+      "177"
+    ],
+    [
+      "174",
+      "178"
+    ],
+    [
+      "174",
+      "179"
+    ],
+    [
+      "174",
+      "180"
+    ],
+    [
+      "174",
+      "181"
+    ],
+    [
+      "174",
+      "182"
+    ],
+    [
+      "174",
+      "184"
+    ],
+    [
+      "174",
+      "185"
+    ],
+    [
+      "174",
+      "187"
+    ],
+    [
+      "174",
+      "435"
+    ],
+    [
+      "174",
+      "190"
+    ],
+    [
+      "174",
+      "189"
+    ],
+    [
+      "174",
+      "191"
+    ],
+    [
+      "166",
+      "192"
+    ],
+    [
+      "192",
+      "193"
+    ],
+    [
+      "192",
+      "197"
+    ],
+    [
+      "192",
+      "194"
+    ],
+    [
+      "192",
+      "195"
+    ],
+    [
+      "192",
+      "196"
+    ],
+    [
+      "192",
+      "198"
+    ],
+    [
+      "166",
+      "199"
+    ],
+    [
+      "199",
+      "200"
+    ],
+    [
+      "199",
+      "201"
+    ],
+    [
+      "199",
+      "203"
+    ],
+    [
+      "199",
+      "202"
+    ],
+    [
+      "199",
+      "204"
+    ],
+    [
+      "199",
+      "205"
+    ],
+    [
+      "199",
+      "206"
+    ],
+    [
+      "199",
+      "207"
+    ],
+    [
+      "199",
+      "208"
+    ],
+    [
+      "199",
+      "209"
+    ],
+    [
+      "199",
+      "210"
+    ],
+    [
+      "199",
+      "211"
+    ],
+    [
+      "199",
+      "212"
+    ],
+    [
+      "199",
+      "213"
+    ],
+    [
+      "199",
+      "214"
+    ],
+    [
+      "199",
+      "215"
+    ],
+    [
+      "199",
+      "216"
+    ],
+    [
+      "199",
+      "217"
+    ],
+    [
+      "199",
+      "218"
+    ]
+  ]
+}

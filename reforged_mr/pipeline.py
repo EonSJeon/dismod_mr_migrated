@@ -192,12 +192,12 @@ def data_bars(df, style='book', color='black', label=None, max=500):
 ################################################################################
 
 
-def initiliaze_pipeline(filepath, verbose=False):
+def initiliaze_pipeline(input_data_path, output_template_path, parameters_path, hierarchy_path, verbose=False):
     ############## 1. Load inputs data ##########################################
-    input_data      = pd.read_csv(f'{filepath}/input_data.csv')
-    output_template = pd.read_csv(f'{filepath}/output_template.csv')
-    parameters      = load_any(f'{filepath}/parameters.jsonc')    
-    hierarchy       = load_any(f'{filepath}/hierarchy.json')       
+    input_data      = pd.read_csv(input_data_path)
+    output_template = pd.read_csv(output_template_path)
+    parameters      = load_any(parameters_path)    
+    hierarchy       = load_any(hierarchy_path)       
     # nodes_to_fit    = load_any(f'{filepath}/nodes_to_fit.json') 
 
     # create region_id_graph with hierarchy
@@ -207,10 +207,10 @@ def initiliaze_pipeline(filepath, verbose=False):
 
     region_id_graph = nx.DiGraph()
     for node in nodes:
-        node_name = node[0]
-        node_id = node[1]['location_id']
-        node_level = node[1]['level']
-        node_parent_id = node[1]['parent_id']
+        node_id = int(node[0])
+        node_name = node[1]['location_name']
+        node_level = int(node[1]['level'])
+        node_parent_id = int(node[1]['parent_id'])
 
         name_to_id[node_name] = node_id
         id_to_name[node_id] = node_name
@@ -226,10 +226,12 @@ def initiliaze_pipeline(filepath, verbose=False):
         # add edges between nodes (ignore root node)
         if node_id != node_parent_id: # ignores root node
             region_id_graph.add_edge(node_parent_id, node_id)
+    
+    assert nx.is_tree(region_id_graph), "region_id_graph is not a tree"
 
-    # since the graph is a tree, the number of nodes should be equal to the number of edges + 1
-    assert region_id_graph.number_of_nodes() == region_id_graph.number_of_edges() + 1, \
-        "number of nodes should be equal to the number of edges + 1"
+    # # since the graph is a tree, the number of nodes should be equal to the number of edges + 1
+    # assert region_id_graph.number_of_nodes() == region_id_graph.number_of_edges() + 1, \
+    #     "number of nodes should be equal to the number of edges + 1"
     
     ############## 2. Initialize pm.Model() and shared_data #####################
     pm_model = pm.Model()
@@ -266,7 +268,7 @@ def generate_pymc_objects(
         reference_sex        = 'Both',
         reference_year       = 'all',
         rate_type            = 'neg_binom',
-        zero_re              = False
+        zero_re              = True
     ):
 
     ############# 1. Store Parameters to shared_data #########################################################
@@ -392,14 +394,14 @@ def generate_pymc_objects(
 
             # covariate & pi
             if include_covariates:
-                pi, U, U_shift, sigma_alpha, alpha, alpha_potentials, const_alpha_sigma, X, X_shift, beta, const_beta_sigma = covariates.mean_covariate_model(mu=mu_interval)
+                pi, U, U_ref, sigma_alpha, alpha, alpha_potentials, const_alpha_sigma, X, X_centering, X_scaling, beta, const_beta_sigma = covariates.mean_covariate_model(mu=mu_interval)
 
             else:
                 pi = mu_interval
 
         if len(data) <= 0:
             if include_covariates:
-                pi, U, U_shift, sigma_alpha, alpha, alpha_potentials, const_alpha_sigma, X, X_shift, beta, const_beta_sigma = covariates.mean_covariate_model(mu=None)
+                pi, U, U_ref, sigma_alpha, alpha, alpha_potentials, const_alpha_sigma, X, X_centering, X_scaling, beta, const_beta_sigma = covariates.mean_covariate_model(mu=None)
             else:
                 assert False, "shouldn't be here"
 
@@ -459,31 +461,31 @@ def generate_pymc_objects(
             
         ############ Covariate Level Constraints #########################################################
         if include_covariates:
-            priors.covariate_level_constraints(X_shift, beta, U, alpha, constrained_mu_age)
+            priors.covariate_level_constraints(X_centering, X_scaling, beta, U, alpha, constrained_mu_age)
 
-        ############ Lower Bound #########################################################################
-        if lb_data is not None and len(lb_data) > 0:
-            lb = {}
-            mu_interval_lb = age_groups.age_standardize_approx(mu_age=constrained_mu_age, use_lb_data=True)
+        # ############ Lower Bound #########################################################################
+        # if lb_data is not None and len(lb_data) > 0:
+        #     lb = {}
+        #     mu_interval_lb = age_groups.age_standardize_approx(mu_age=constrained_mu_age, use_lb_data=True)
 
-            if include_covariates:
-                pi_lb, _, _, _, _, _, _, _, _, _, _ = covariates.mean_covariate_model(mu=mu_interval_lb, use_lb_data=True)
-            else:
-                pi_lb = mu_interval_lb
+        #     if include_covariates:
+        #         pi_lb, _, _, _, _, _, _, _, _, _, _ = covariates.mean_covariate_model(mu=mu_interval_lb, use_lb_data=True)
+        #     else:
+        #         pi_lb = mu_interval_lb
 
-            delta_lb = covariates.dispersion_covariate_model(lower=1e12, upper=1e13, use_lb_data=True)
+        #     delta_lb = covariates.dispersion_covariate_model(lower=1e12, upper=1e13, use_lb_data=True)
 
-            se_lb = lb_data['standard_error'].mask(
-                lb_data['standard_error'].le(0) | lb_data['standard_error'].isna(),
-                (lb_data['upper_ci'] - lb_data['lower_ci']) / (2 * 1.96)
-            )
-            ess_lb = lb_data['effective_sample_size'].fillna(
-                lb_data['value'] * (1 - lb_data['value']) / se_lb**2
-            )
-            lb_data['standard_error'] = se_lb
-            lb_data['effective_sample_size'] = ess_lb
+        #     se_lb = lb_data['standard_error'].mask(
+        #         lb_data['standard_error'].le(0) | lb_data['standard_error'].isna(),
+        #         (lb_data['upper_ci'] - lb_data['lower_ci']) / (2 * 1.96)
+        #     )
+        #     ess_lb = lb_data['effective_sample_size'].fillna(
+        #         lb_data['value'] * (1 - lb_data['value']) / se_lb**2
+        #     )
+        #     lb_data['standard_error'] = se_lb
+        #     lb_data['effective_sample_size'] = ess_lb
 
-            likelihood.neg_binom_lower_bound(pi=pi_lb, delta=delta_lb)
+        #     likelihood.neg_binom_lower_bound(pi=pi_lb, delta=delta_lb)
 
 
         ############ Store Reuseable Variables for predict_for() #########################################################
@@ -493,9 +495,10 @@ def generate_pymc_objects(
             pm_model.shared_data['beta'] = beta
             pm_model.shared_data['const_beta_sigma'] = const_beta_sigma
             pm_model.shared_data['X'] = X
-            pm_model.shared_data['X_shift'] = X_shift
+            pm_model.shared_data['X_centering'] = X_centering
+            pm_model.shared_data['X_scaling'] = X_scaling
             pm_model.shared_data['U'] = U
-            pm_model.shared_data['U_shift'] = U_shift
+            pm_model.shared_data['U_ref'] = U_ref
 
 
 
@@ -611,12 +614,13 @@ def predict_for(
         beta = pm_model.shared_data['beta']
         const_beta_sigma = pm_model.shared_data['const_beta_sigma']
         X = pm_model.shared_data['X']
-        X_shift = pm_model.shared_data['X_shift']
+        X_centering = pm_model.shared_data['X_centering']
+        X_scaling = pm_model.shared_data['X_scaling']
         output_template = pm_model.shared_data['output_template']
         region_id_graph = pm_model.shared_data['region_id_graph']
         name_to_id = pm_model.shared_data['name_to_id']
         U = pm_model.shared_data['U']
-        U_shift = pm_model.shared_data['U_shift']
+        U_ref = pm_model.shared_data['U_ref']
         id_to_name = pm_model.shared_data['id_to_name']
 
 
@@ -690,7 +694,7 @@ def predict_for(
             X_df["x_sex"] = SEX_VALUE[sex]
 
         # (3) shift(centering) 적용
-        X_df = X_df - X_shift
+        X_df = (X_df - X_centering) / X_scaling
 
     else:
         X_df = pd.DataFrame(index=grp.index)
@@ -714,7 +718,7 @@ def predict_for(
         path = nx.shortest_path(region_id_graph, name_to_id[root_area], leaf)
         for node in path[1:]:
             if node in U_row.index:
-                U_row[node] = 1.0 - U_shift.get(node, 0.0)
+                U_row[node] = 1.0 - U_ref.get(node, 0.0)
 
         # (2) random-effect 기여: alpha_trace · U_row
         if alpha_trace.size > 0:

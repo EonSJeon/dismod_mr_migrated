@@ -103,107 +103,97 @@ def derivative_constraints(mu_age: at.TensorVariable):
     )
 
 
-def covariate_level_constraints(X_shift, beta, U, alpha, mu_age) -> at.TensorVariable:
+def covariate_level_constraints(X_centering, X_scaling, beta, U, alpha, mu_age) -> at.TensorVariable:
     """
     Enforce level‐bounds on the covariate‐adjusted rate curve.
     If bounds['lower'] == 0, we skip the lower‐bound term entirely.
     """
+    # --------------------------- 1) Initialize PyMC model ---------------------------   
+    pm_model = pm.modelcontext(None)  # reforged_mr/model/priors/covariate_level_constraints()
 
-    # --------------------------- 1) initialize pm_model ---------------------------   
-    pm_model = pm.modelcontext(None) # at reforged_mr/model/priors/covariate_level_constraints()
-
-
-    # --------------------------- 2) extract shared data ---------------------------   
-    data_type = pm_model.shared_data["data_type"]
+    # --------------------------- 2) Extract shared data -----------------------------   
+    data_type       = pm_model.shared_data["data_type"]
     region_id_graph = pm_model.shared_data["region_id_graph"]
-    params = pm_model.shared_data["params_of_data_type"]
+    params          = pm_model.shared_data["params_of_data_type"]
+
     lvl    = params.get('level_value')
     bounds = params.get('level_bounds')
+
+    # Exit if no level info
     if not lvl or not bounds:
-        # nothing to do if no level_value or no level_bounds
         return {}
 
-    # 2) Compute sex covariate range (after centering)
-    sex_idx = list(X_shift.index).index('x_sex')
-    X_sex_max = 0.5 - X_shift['x_sex']
-    X_sex_min = -0.5 - X_shift['x_sex']
+    # --------------------------- 3) Compute sex covariate range (after centering) --- 
+    sex_idx    = list(X_centering.index).index('x_sex')
+    X_sex_max  =  0.5 - X_centering['x_sex'] / X_scaling['x_sex']
+    X_sex_min  = -0.5 - X_centering['x_sex'] / X_scaling['x_sex']
 
-    # 3) Build “layers” of U‐masks for the random‐effects hierarchy
+    # --------------------------- 4) Build “layers” of U‐masks -----------------------
     layers: list[np.ndarray] = []
+    global_id = 1  # TODO: make it a parameter later 
 
-    global_id = 1 # TODO: make it a parameter later 
     nodes = [global_id]
     for _ in range(3):
         nodes = [c for n in nodes for c in region_id_graph.successors(n)]
-        mask = np.array([col in nodes for col in U.columns], dtype=bool)
+        mask  = np.array([col in nodes for col in U.columns], dtype=bool)
         if mask.any():
             layers.append(mask)
 
-    # 4) Prepare log‐bounds.  If lower==0, skip that term:
+    # --------------------------- 5) Prepare log‐bounds ------------------------------
     lower_val = bounds['lower']
     if lower_val <= 0:
-        # Skip any “below‐bound” penalty
-        low = None
+        low = None 
     else:
         low = np.log(lower_val)
 
-    # high bound is always log(upper)
-    high = np.log(bounds['upper'])
+    high = np.log(bounds['upper'])  # high bound always exists
 
-    # 5) Inside the PyMC model, build the potential:
-    mu = mu_age  # (TensorVariable, shape=(len(ages),))
+    # --------------------------- 6) Build potential inside PyMC ---------------------
+    mu        = mu_age
+    log_vals  = at.log(mu)           # log(mu) at each age
+    log_max   = at.max(log_vals)     # base‐curve extrema
+    log_min   = at.min(log_vals)
 
-    # (a) log(mu) at each age
-    log_vals = at.log(mu)
-
-    # (b) base‐curve extrema
-    log_max = at.max(log_vals)
-    log_min = at.min(log_vals)
-
-    # (c) add random‐effect contributions, if any
-    if alpha is None:
-        alpha_list = []
-    else:
-        alpha_list = alpha
-
+    # (a) Add random‐effect contributions
+    alpha_list = [] if alpha is None else alpha
     if len(alpha_list) > 0:
         alphas = at.stack(alpha_list)  # shape=(n_re,)
         for m in layers:
             m_idx = np.where(m)[0]
             if m_idx.size > 0:
                 sub_alphas = alphas[m_idx]
-                log_max = log_max + at.max(sub_alphas)
-                log_min = log_min + at.min(sub_alphas)
+                log_max += at.max(sub_alphas)
+                log_min += at.min(sub_alphas)
 
-    # (d) add sex fixed‐effect
+    # (b) Add sex fixed‐effect
     b_sex = beta[sex_idx]
     try:
-        # if b_sex is a TensorVariable
-        log_max = log_max + X_sex_max * b_sex
-        log_min = log_min + X_sex_min * b_sex
-    except (TypeError, AttributeError):
-        # b_sex was numeric
-        log_max = log_max + X_sex_max * float(b_sex)
-        log_min = log_min + X_sex_min * float(b_sex)
+        log_max += X_sex_max * b_sex
+        log_min += X_sex_min * b_sex
+    except (TypeError, AttributeError):  # numeric case
+        log_max += X_sex_max * float(b_sex)
+        log_min += X_sex_min * float(b_sex)
 
-    # (e) compute “below‐lower” violation only if low is not None
+    # (c) Compute “below‐lower” violation (if applicable)
     if low is None:
         v_low = at.constant(0.0)
     else:
-        v_low = at.minimum(0, log_min - low)
-        # (if log_min < low, then log_min–low < 0, so v_low<0; else v_low=0)
+        v_low = at.minimum(0, log_min - low)  # negative if below bound
 
-    # (f) always compute “above‐upper” violation
-    v_high = at.maximum(0, log_max - high)
-    # (if log_max > high, then log_max–high>0, so v_high>0; else v_high=0)
+    # (d) Compute “above‐upper” violation
+    v_high = at.maximum(0, log_max - high)    # positive if above bound
 
-    # (g) put them through a very‐tight Normal(0, 1e‐6) penalty
-    sigma = 1e-6
-    stacked_v = at.stack([v_low, v_high])
-    norm_dist = pm.Normal.dist(mu=0.0, sigma=sigma)
-    logp_vals = pm.logp(norm_dist, stacked_v)
-    logp_sum  = at.sum(logp_vals)
+    # --------------------------- 7) Apply tight Normal(0, 1e-6) penalty --------------
+    sigma       = 1e-6
+    stacked_v   = at.stack([v_low, v_high])
+    norm_dist   = pm.Normal.dist(mu=0.0, sigma=sigma)
+    logp_vals   = pm.logp(norm_dist, stacked_v)
+    logp_sum    = at.sum(logp_vals)
 
-    # (h) register as a single Potential
-    covariate_constraint = pm.Potential(f"covariate_constraint_{data_type}", var=logp_sum)
+    # --------------------------- 8) Register as Potential ---------------------------
+    covariate_constraint = pm.Potential(
+        f"covariate_constraint_{data_type}",
+        var=logp_sum
+    )
+
     return covariate_constraint
