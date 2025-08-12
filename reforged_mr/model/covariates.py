@@ -6,7 +6,7 @@ from typing import Dict, List, Tuple, Any
 import pytensor.tensor as at
 
 
-SEX_VALUE = {'Male': .5, 'Both': 0., 'Female': -.5}
+SEX_VALUE = {1: .5, 3: 0., 2: -.5}
 
 
 def MyTruncatedNormal(name, mu, sigma, lower, upper):
@@ -271,7 +271,7 @@ def mean_covariate_model(mu: at.TensorVariable):
 
     keep = [c for c in input_data.columns if c.startswith('x_')]
     X = input_data[keep].copy()
-    X['x_sex'] = [SEX_VALUE[row['sex']] for _, row in input_data.iterrows()]
+    X['x_sex'] = [SEX_VALUE[row['sex_id']] for _, row in input_data.iterrows()]
     X = X.astype(float)
 
     # --- 2) 분석 가중치: effective_sample_size 필수

@@ -290,7 +290,6 @@ def generate_pymc_objects(
     params_of_data_type = pm_model.shared_data['parameters'][data_type]    
     
     pm_model.shared_data['data']                = data
-    pm_model.shared_data['lower_bound']         = lb_data ######!!!!!!!!!!!!!!ERROR
     pm_model.shared_data['params_of_data_type'] = params_of_data_type
 
     ############# 3. Fetch ages and age_weights from parameters #####################
@@ -374,10 +373,9 @@ def generate_pymc_objects(
             unconstrained_mu_age = mu_age
         else:
             unconstrained_mu_age = spline.spline()
-
         constrained_mu_age = priors.level_constraints(unconstrained_mu_age)
         priors.derivative_constraints(mu_age=constrained_mu_age)            
-    
+
         if mu_age_parent is not None: # penalize based on similarity to parent
             priors.similar(
                 mu_child         = constrained_mu_age,
@@ -599,9 +597,9 @@ def predict_for(
     root_area           = 'Global',
     root_sex            = 'Both',
     root_year           = 'all',
-    area                = 'Global',
-    sex                 = 'Female',
-    year                = 2005,
+    location_id            = 1,
+    sex_name                 = 'Female',
+    year_id                = 2005,
     population_weighted = True,
     lower               = 0.0,
     upper               = 1.0,
@@ -668,30 +666,30 @@ def predict_for(
 
 
     # 5) leaf-nodes 찾기
-    leaves = [n for n in nx.bfs_tree(region_id_graph, name_to_id[area]) if region_id_graph.out_degree(n) == 0]
-    if not leaves:
-        leaves = [name_to_id[area]]
+    leaf_ids = [n for n in nx.bfs_tree(region_id_graph, location_id) if region_id_graph.out_degree(n) == 0]
+    if not leaf_ids:
+        leaf_ids = [location_id]
 
     # 6) output_template에서 (area, sex, year)에 해당하는 pop, covariates 추출
     output_tpl = output_template.copy()
-    grp = (
-        output_tpl
-        .groupby(["area", "sex", "year"], as_index=False)
-        .mean()
-        .set_index(["area", "sex", "year"])
-    )
-    # len(grp) is equal to lins in output_template.csv
+    output_tpl["location_id"] = output_tpl["location_id"].astype(int)
+    output_tpl["sex_name"]      = output_tpl["sex_name"].astype(str)
+    output_tpl["year_id"]       = output_tpl["year_id"].astype(int)
 
+    grp = (output_tpl
+       .set_index(["location_id","sex_name","year_id"])
+       .sort_index())
+    # len(grp) is equal to lens in output_template.csv
 
     SEX_VALUE = {'Male': .5, 'Both': 0., 'Female': -.5}
     # 7) X_df (centered covariates) 준비
     if isinstance(X, pd.DataFrame) and not X.empty:
-        # (1) 원래 vars["X"].columns에 들어있는 이름들로 grp에서 필터
+        # (1) 원래 vars["X"].columns에 들어있는 이름들로 grp에서 필터        
         X_df = grp.filter(X.columns, axis=1).copy()
 
         # (2) "x_sex"가 vars["X"].columns에 있으면 강제로 생성
         if "x_sex" in X.columns:
-            X_df["x_sex"] = SEX_VALUE[sex]
+            X_df["x_sex"] = SEX_VALUE[sex_name]
 
         # (3) shift(centering) 적용
         X_df = (X_df - X_centering) / X_scaling
@@ -699,7 +697,6 @@ def predict_for(
     else:
         X_df = pd.DataFrame(index=grp.index)
 
-    
     # 8) U_row Series 준비 (한 행짜리)
     if isinstance(U, pd.DataFrame) and not U.empty:
         U_cols = U.columns
@@ -712,10 +709,11 @@ def predict_for(
     cov_shift = np.zeros(n_samples)
     total_weight = 0.0
 
-    for leaf in leaves:
+    
+    for leaf_id in leaf_ids:
         # (1) U_row 재설정
         U_row[:] = 0.0
-        path = nx.shortest_path(region_id_graph, name_to_id[root_area], leaf)
+        path = nx.shortest_path(region_id_graph, name_to_id[root_area], leaf_id)
         for node in path[1:]:
             if node in U_row.index:
                 U_row[node] = 1.0 - U_ref.get(node, 0.0)
@@ -727,12 +725,15 @@ def predict_for(
             log_shift = np.zeros(n_samples)
 
         # (3) fixed-effect 기여: beta_trace · X_vals
-        if beta_trace.size and (leaf, sex, year) in X_df.index:
-            x_vals = X_df.loc[(leaf, sex, year)].values
+        if beta_trace.size and (leaf_id, sex_name, year_id) in X_df.index:
+            x_vals = X_df.loc[(leaf_id, sex_name, year_id)].values
             log_shift = log_shift + beta_trace.dot(x_vals)
 
         # (4) population‐weight or unweighted average
-        pop = float(grp.at[(id_to_name[leaf], sex, year), "pop"])
+        print(leaf_id, sex_name, year_id)
+        print(grp.index)
+        print(grp.at[(leaf_id, sex_name, year_id), "pop"])
+        pop = float(grp.at[(leaf_id, sex_name, year_id), "pop"])
 
         if population_weighted:
             cov_shift += np.exp(log_shift) * pop
@@ -802,9 +803,9 @@ def world_map(
             root_area           = 'Global',
             root_sex            = 'Both',
             root_year           = 'all',
-            area                = area,
-            sex                 = 'Both',
-            year                = year,
+            location_id                = area,
+            sex_name                 = 'Both',
+            year_id                = year,
             population_weighted = True,
             lower               = 0.0,
             upper               = 1.0,
