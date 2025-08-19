@@ -306,7 +306,9 @@ def mean_covariate_model(mu: at.TensorVariable):
         spec = parameters.get('fixed_effects', {}).get(effect)
         if spec:
             dist = spec['dist']
-            if dist == 'TruncatedNormal':
+            if dist == 'Zero':
+                beta.append(pm.Deterministic(name, at.as_tensor_variable(0.0)))
+            elif dist == 'TruncatedNormal':
                 beta.append(
                     MyTruncatedNormal(
                         name=name,
@@ -316,14 +318,37 @@ def mean_covariate_model(mu: at.TensorVariable):
                         upper=float(spec['upper'])
                     )
                 )
+            elif dist == 'HalfNormal':
+                sign = spec.get('sign', 'positive')  # 기본은 양수
+                if sign == 'negative':
+                    half = pm.HalfNormal(
+                        name + "_half",
+                        sigma=max(float(spec.get('sigma', 1.0)), 1e-3),
+                        initval=abs(spec.get('initval', 0.1))
+                    )
+                    beta.append(pm.Deterministic(name, -half))
+                else:
+                    beta.append(
+                        pm.HalfNormal(
+                            name,
+                            sigma=max(float(spec.get('sigma', 1.0)), 1e-3),
+                            initval=spec.get('initval', 0.1)
+                        )
+                    )
             else:
-                beta.append(pm.Normal(name,
-                                       mu=spec.get('mu', 0),
-                                       sigma=spec.get('sigma', 1)))
-            const_beta_sigma.append(spec.get('sigma') if dist=='Constant' else np.nan)
+                beta.append(
+                    pm.Normal(
+                        name,
+                        mu=spec.get('mu', 0),
+                        sigma=spec.get('sigma', 1)
+                    )
+                )
+
+            const_beta_sigma.append(spec.get('sigma') if dist == 'Constant' else np.nan)
         else:
             beta.append(pm.Normal(name, mu=0.0, sigma=1.0))
             const_beta_sigma.append(np.nan)
+
 
     n_obs = U.shape[0]
 

@@ -58,8 +58,23 @@
 
     // Model effects (empty by default)
     "fixed_effects": {
-      /* no fixed effects defined */
+      "x_sev": {
+        "dist": "HalfNormal",
+        "sigma": 1.0,
+        "sign": "positive"
+      },
+      "x_lpa": {
+        "dist": "HalfNormal",
+        "sigma": 1.0,
+        "sign": "positive"
+      },
+      "x_sdi": {
+        "dist": "Zero",
+        "sigma": 1.0,
+        "sign": "negative"
+      }
     },
+
     "random_effects": {
       /* no random effects defined */
     },
