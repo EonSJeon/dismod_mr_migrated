@@ -634,7 +634,6 @@ def visualize_pred(pred, data, save_path=None):
     plt.show()
 
 
-
 def predict_for(
     pm_model,
     idata, 
@@ -652,43 +651,81 @@ def predict_for(
 ):
     """
     반환:
-      - return_scalar == True  
-          dict {
+      - return_scalar == True  → dict {
             'prevalence': (n_samples,)  연령가중 평균 유병률
-            'cases':      (n_samples,)  절대 환자 수 (유병률×인구)
-          }
-      - return_scalar == False 
-          (n_samples, n_ages) : 연령별 곡선
+            'cases'     : (n_samples,)  절대 환자 수 (유병률×인구)
+        }
+      - return_scalar == False → (n_samples, n_ages) : 연령별 곡선
+    가중치는 항상 detailed_pop(성별 포함)을 사용. 요청 성별 인구가 없으면 ValueError.
     """
 
+    # -------------------- 0) baseline mu_age (draw x age) --------------------
     arr = idata.posterior['constrained_mu_age_p'].values
-    n_chain, n_draw, n_ages = arr.shape
-    mu_trace = arr.reshape((n_chain * n_draw, n_ages))
+    n_chain, n_draw, n_ages = arr.shape                 # (C, S, A)
+    mu_trace = arr.reshape((n_chain * n_draw, n_ages))  # (n_samples, n_ages)
     n_samples = mu_trace.shape[0]
     age_index = np.arange(n_ages)
 
-    # -------------------- shared_data --------------------
-    alpha              = pm_model.shared_data['alpha']
-    const_alpha_sigma  = pm_model.shared_data['const_alpha_sigma']
-    beta               = pm_model.shared_data['beta']
-    const_beta_sigma   = pm_model.shared_data['const_beta_sigma']
-    X                  = pm_model.shared_data['X']
-    X_centering        = pm_model.shared_data['X_centering']
-    X_scaling          = pm_model.shared_data['X_scaling']
-    output_template    = pm_model.shared_data['output_template']
-    region_id_graph    = pm_model.shared_data['region_id_graph']
-    U                  = pm_model.shared_data['U']
-    U_ref              = pm_model.shared_data['U_ref']
-    detailed_pop       = pm_model.shared_data['detailed_pop']
+    # 항상 필요한 공용 데이터
+    region_id_graph = pm_model.shared_data['region_id_graph']
+    detailed_pop    = pm_model.shared_data['detailed_pop']
 
-    # -------------------- alpha_trace --------------------
+    # -------------------- 1) 공변량/RE 미포함 모드 --------------------
+    if not include_covariates:
+        # leaf(국가) 수집
+        if location_id in region_id_graph:
+            leaf_ids = [n for n in nx.bfs_tree(region_id_graph, location_id)
+                        if region_id_graph.out_degree(n) == 0]
+            if not leaf_ids:
+                leaf_ids = [location_id]
+        else:
+            leaf_ids = [location_id]
+
+        if return_scalar:
+            num_prev  = np.zeros(n_samples)
+            num_cases = np.zeros(n_samples)
+            den = 0.0
+
+            for leaf in leaf_ids:
+                # ★ 성별 포함 strict 가중치
+                w = _pop_weights_for_leaf(detailed_pop, leaf, year_id, age_index, sex_name)
+                ws = w.sum()
+                if ws <= 0:
+                    continue
+                num_prev  += (mu_trace * w[None, :]).sum(axis=1)
+                num_cases += (mu_trace * w[None, :]).sum(axis=1)
+                den += ws
+
+            if den <= 0:
+                raise ValueError(f"[predict_for] detailed_pop empty: loc={location_id}, year={year_id}, sex={sex_name}")
+
+            prevalence = np.clip(num_prev / den, lower, upper)
+            cases      = num_cases  # (유병률 × 인구)의 합
+            return {"prevalence": prevalence, "cases": cases}
+
+        # 곡선 반환 (공변량/RE 없으면 지역/성별과 무관)
+        return np.clip(mu_trace, lower, upper)
+
+    # -------------------- 2) 공변량/RE 포함 모드 --------------------
+    alpha             = pm_model.shared_data['alpha']
+    const_alpha_sigma = pm_model.shared_data['const_alpha_sigma']
+    beta              = pm_model.shared_data['beta']
+    const_beta_sigma  = pm_model.shared_data['const_beta_sigma']
+    X                 = pm_model.shared_data['X']
+    X_centering       = pm_model.shared_data['X_centering']
+    X_scaling         = pm_model.shared_data['X_scaling']
+    output_template   = pm_model.shared_data['output_template']
+    U                 = pm_model.shared_data['U']
+    U_ref             = pm_model.shared_data['U_ref']
+
+    # alpha_trace (RE)
     alpha_trace = np.empty((n_samples, 0))
     if isinstance(alpha, list) and alpha:
         traces = []
         for alpha_node, sigma_const in zip(alpha, const_alpha_sigma):
             name_alpha = alpha_node.name
             if name_alpha in idata.posterior:
-                arr_a = idata.posterior[name_alpha].values
+                arr_a = idata.posterior[name_alpha].values  # (C, S)
                 traces.append(arr_a.reshape(n_chain * n_draw))
             else:
                 sig = _safe_sigma(sigma_const)
@@ -697,14 +734,14 @@ def predict_for(
                 traces.append(draws)
         alpha_trace = np.column_stack(traces)
 
-    # -------------------- beta_trace --------------------
+    # beta_trace (FE)
     beta_trace = np.empty((n_samples, 0))
     if isinstance(beta, list) and beta:
         traces = []
         for beta_node, sigma_const in zip(beta, const_beta_sigma):
             name_beta = beta_node.name
             if name_beta in idata.posterior:
-                arr_b = idata.posterior[name_beta].values
+                arr_b = idata.posterior[name_beta].values  # (C, S)
                 traces.append(arr_b.reshape(n_chain * n_draw))
             else:
                 sig = _safe_sigma(sigma_const)
@@ -713,15 +750,16 @@ def predict_for(
                 traces.append(draws)
         beta_trace = np.column_stack(traces)
 
-    # -------------------- leaf nodes --------------------
+    # leaf nodes
     if location_id in region_id_graph:
-        leaf_ids = [n for n in nx.bfs_tree(region_id_graph, location_id) if region_id_graph.out_degree(n) == 0]
+        leaf_ids = [n for n in nx.bfs_tree(region_id_graph, location_id)
+                    if region_id_graph.out_degree(n) == 0]
         if not leaf_ids:
             leaf_ids = [location_id]
     else:
         leaf_ids = [location_id]
 
-    # -------------------- X_df --------------------
+    # X_df 준비
     output_tpl = output_template.copy()
     output_tpl["location_id"] = output_tpl["location_id"].astype(int)
     output_tpl["sex_name"]    = output_tpl["sex_name"].astype(str)
@@ -737,14 +775,14 @@ def predict_for(
     else:
         X_df = pd.DataFrame(index=grp.index)
 
-    # -------------------- U_row --------------------
+    # U_row 초기화
     if isinstance(U, pd.DataFrame) and not U.empty:
         U_cols = U.columns
         U_row_template = pd.Series(0.0, index=U_cols)
     else:
         U_row_template = pd.Series(dtype=float)
 
-    # -------------------- aggregation --------------------
+    # aggregation
     if return_scalar:
         num_prev  = np.zeros(n_samples)
         num_cases = np.zeros(n_samples)
@@ -759,35 +797,36 @@ def predict_for(
         # (a) U_row
         if not U_row_template.empty and (leaf in region_id_graph):
             U_row = U_row_template.copy()
-            path = nx.shortest_path(region_id_graph, pm_model.shared_data['name_to_id'][root_area], leaf)
+            path = nx.shortest_path(region_id_graph, pm_model.shared_data['name_to_id']['Global'], leaf)
             for node in path[1:]:
                 if node in U_row.index:
                     U_row[node] = 1.0 - U_ref.get(node, 0.0)
         else:
             U_row = pd.Series(dtype=float)
 
-        # (b) log_shift
+        # (b) log_shift = alpha·U + beta·x
         if alpha_trace.size > 0 and not U_row.empty:
             log_shift = alpha_trace.dot(U_row.values)
         else:
             log_shift = np.zeros(n_samples)
+
         if beta_trace.size > 0 and ((leaf, sex_name, year_id) in X_df.index):
             x_vals = X_df.loc[(leaf, sex_name, year_id)].values
             log_shift = log_shift + beta_trace.dot(x_vals)
 
-        # (c) predictions
+        # (c) 예측 곡선
         preds_leaf = mu_trace * np.exp(log_shift)[:, None]
         preds_leaf = np.clip(preds_leaf, lower, upper)
 
-        # (d) population weights
-        w = _pop_weights_for_leaf(detailed_pop, leaf, year_id, age_index)
+        # (d) 성별 포함 strict 가중치
+        w = _pop_weights_for_leaf(detailed_pop, leaf, year_id, age_index, sex_name)
         ws = w.sum()
         if ws <= 0:
             continue
 
         if return_scalar:
-            num_prev  += (preds_leaf * w[None, :]).sum(axis=1)   # prevalence numerator
-            num_cases += (preds_leaf * w[None, :]).sum(axis=1)   # absolute cases
+            num_prev  += (preds_leaf * w[None, :]).sum(axis=1)
+            num_cases += (preds_leaf * w[None, :]).sum(axis=1)
             den += ws
         else:
             if population_weighted:
@@ -797,16 +836,13 @@ def predict_for(
                 num += preds_leaf
                 leaf_count += 1
 
-    # -------------------- finalize --------------------
+    # finalize
     if return_scalar:
         if den <= 0:
-            raise ValueError(f"[predict_for] no population: loc={location_id}, year={year_id}")
-        prevalence = num_prev / den
+            raise ValueError(f"[predict_for] no population: loc={location_id}, year={year_id}, sex={sex_name}")
+        prevalence = np.clip(num_prev / den, lower, upper)
         cases      = num_cases
-        return {
-            "prevalence": np.clip(prevalence, lower, upper),
-            "cases": cases
-        }
+        return {"prevalence": prevalence, "cases": cases}
     else:
         if population_weighted:
             den_safe = np.where(den > 0, den, 1e-12)
@@ -818,10 +854,8 @@ def predict_for(
             preds_curve = num / leaf_count
             return np.clip(preds_curve, lower, upper)
 
-
 # ------------ 헬퍼: NaN/비정상 sigma 방어 ------------
 def _safe_sigma(sigma_const):
-    # const_beta_sigma/const_alpha_sigma에서 Constant가 아닌 경우 NaN일 수 있으므로 방어
     try:
         sig = float(sigma_const)
         if not np.isfinite(sig) or sig <= 0:
@@ -830,24 +864,161 @@ def _safe_sigma(sigma_const):
     except Exception:
         return 1.0
 
-# ------------ 헬퍼: detailed_pop에서 leaf의 연령별 가중치 벡터 ------------
-def _pop_weights_for_leaf(detailed_pop_df, leaf_id, year_id, age_index):
+# ------------ 헬퍼: 성별 포함 strict 인구 가중치 ------------
+def _pop_weights_for_leaf(detailed_pop_df, leaf_id, year_id, age_index, sex_name: str):
     """
+    strict: 요청한 (leaf_id, year_id, sex_name)의 인구가 없으면 ValueError.
     detailed_pop schema:
-      location_id, location_name, age, year_id, value
-    반환: length=len(age_index)의 np.ndarray (연령별 인구), 누락 age는 0으로 채움
+      location_id, location_name, sex_id, sex_name, age, year_id, value
     """
-    sel = detailed_pop_df[(detailed_pop_df['location_id'] == int(leaf_id)) &
-                          (detailed_pop_df['year_id'] == int(year_id))]
-    if sel.empty:
-        # 해당 연도 데이터가 없으면 0 벡터(스킵되게)
-        return np.zeros_like(age_index, dtype=float)
+    leaf_id = int(leaf_id)
+    year_id = int(year_id)
 
-    w = sel.set_index('age')['value']                # Series: age -> value
-    w = w.reindex(age_index).fillna(0.0).to_numpy()  # align to model age grid
+    sel = detailed_pop_df[
+        (detailed_pop_df['location_id'] == leaf_id) &
+        (detailed_pop_df['year_id'] == year_id) &
+        (detailed_pop_df['sex_name'] == sex_name)
+    ]
+    if sel.empty:
+        raise ValueError(f"[pop_weights] Missing population for loc={leaf_id}, year={year_id}, sex={sex_name}")
+
+    s = sel.set_index('age')['value']
+    w = s.reindex(age_index).fillna(0.0).to_numpy(dtype=float)
     return w
 
 
+
+def world_predict(
+    pm_model,
+    idata,
+    years,              
+    output_csv_path
+):
+    # 1) 그래프/이름 매핑
+    region_id_graph = pm_model.shared_data['region_id_graph']
+    id_to_name      = pm_model.shared_data['id_to_name']
+    ages            = pm_model.shared_data['ages']
+    age_weights_in  = pm_model.shared_data['age_weights']
+
+    ages = np.asarray(ages, dtype=int)
+    age_w = _as_age_weight_vector(age_weights_in, ages)
+
+    # 2) level 0,2,3 노드만
+    target_levels = {0, 2, 3}
+    nodes = []
+    for nid_str, data in region_id_graph.nodes(data=True):
+        level = data.get('level', None)
+        if level in target_levels:
+            try:
+                nid_int = int(nid_str)
+            except (TypeError, ValueError):
+                continue
+            nodes.append((nid_int, level, id_to_name.get(nid_int, str(nid_int))))
+
+    # ✅ GBD 관행 sex_id 매핑
+    sex_id_map = {'Male': 1, 'Female': 2, 'Both': 3}
+
+    rows = []
+    for year in years:
+        for sex in ['Both', 'Male', 'Female']:
+            for loc_id, level, loc_name in nodes:
+                try:
+                    # 1) 스칼라(유병률/환자수)
+                    res_scalar = predict_for(
+                        pm_model,
+                        idata,
+                        root_area='Global',
+                        root_sex='Both',
+                        root_year='all',
+                        location_id=loc_id,
+                        sex_name=sex,
+                        year_id=int(year),
+                        population_weighted=True,
+                        lower=0.0,
+                        upper=1.0,
+                        include_covariates=True,
+                        return_scalar=True,
+                    )
+                    prev_samples  = res_scalar["prevalence"]
+                    cases_samples = res_scalar["cases"]
+
+                    # 2) 연령표준화 유병률 (곡선 한 번 더)
+                    preds_curve = predict_for(
+                        pm_model,
+                        idata,
+                        root_area='Global',
+                        root_sex='Both',
+                        root_year='all',
+                        location_id=loc_id,
+                        sex_name=sex,
+                        year_id=int(year),
+                        population_weighted=True,
+                        lower=0.0,
+                        upper=1.0,
+                        include_covariates=True,
+                        return_scalar=False,
+                    )
+                    if preds_curve.ndim != 2 or preds_curve.shape[1] != len(age_w):
+                        raise ValueError(
+                            f"preds_curve shape {preds_curve.shape} != age_weights length {len(age_w)}"
+                        )
+                    prev_std_samples = preds_curve @ age_w  # (n_samples,)
+
+                    # 요약
+                    mean_prev     = float(np.mean(prev_samples))
+                    lower_prev    = float(np.percentile(prev_samples, 2.5))
+                    upper_prev    = float(np.percentile(prev_samples, 97.5))
+
+                    mean_cases    = float(np.mean(cases_samples))
+                    lower_cases   = float(np.percentile(cases_samples, 2.5))
+                    upper_cases   = float(np.percentile(cases_samples, 97.5))
+
+                    mean_prev_std   = float(np.mean(prev_std_samples))
+                    lower_prev_std  = float(np.percentile(prev_std_samples, 2.5))
+                    upper_prev_std  = float(np.percentile(prev_std_samples, 97.5))
+
+                    rows.append({
+                        "location_id":     loc_id,
+                        "location_name":   loc_name,
+                        "sex_name":        sex,
+                        "sex_id":          sex_id_map[sex],
+                        "level":           level,
+                        "year":            int(year),
+                        "mean_prev":       mean_prev,
+                        "lower_prev":      lower_prev,
+                        "upper_prev":      upper_prev,
+                        "mean_cases":      mean_cases,
+                        "lower_cases":     lower_cases,
+                        "upper_cases":     upper_cases,
+                        "mean_prev_std":   mean_prev_std,
+                        "lower_prev_std":  lower_prev_std,
+                        "upper_prev_std":  upper_prev_std,
+                    })
+
+                except ValueError as e:
+                    print(f"[world_predict] Skip loc={loc_id} ({loc_name}), year={year}, sex={sex} :: {e}")
+                except Exception as e:
+                    print(f"[world_predict] Error  loc={loc_id} ({loc_name}), year={year}, sex={sex} :: {e}")
+
+    # 4) 저장
+    if len(rows) == 0:
+        print("[world_predict] Warning: no rows computed; CSV not written.")
+        return pd.DataFrame(columns=[
+            "location_id","location_name","sex_name","sex_id","level","year",
+            "mean_prev","lower_prev","upper_prev",
+            "mean_cases","lower_cases","upper_cases",
+            "mean_prev_std","lower_prev_std","upper_prev_std",
+        ])
+
+    df = (
+        pd.DataFrame(rows)
+        .sort_values(["year","level","location_name","sex_id"])
+        .reset_index(drop=True)
+    )
+    df.to_csv(output_csv_path, index=False)
+    print(f"[world_predict] Saved {len(df)} rows to '{output_csv_path}'")
+
+    return df
 
 def _as_age_weight_vector(age_weights, ages):
     """
@@ -872,132 +1043,3 @@ def _as_age_weight_vector(age_weights, ages):
     if total > 0 and np.isfinite(total):
         vec = vec / total
     return vec
-
-def world_predict(
-    pm_model,
-    idata,
-    years,              
-    output_csv_path
-):
-    # 1) 그래프/이름 매핑
-    region_id_graph = pm_model.shared_data['region_id_graph']  # networkx.DiGraph(), 노드키: 문자열
-    id_to_name      = pm_model.shared_data['id_to_name']       # {int_id: location_name}
-    ages            = pm_model.shared_data['ages']             # list-like of ages (모델 age grid)
-    age_weights_in  = pm_model.shared_data['age_weights']      # age->weight (dict/Series/list/ndarray)
-
-    # age_weights를 모델 ages 순서에 맞춘 벡터로 변환
-    ages = np.asarray(ages, dtype=int)
-    age_w = _as_age_weight_vector(age_weights_in, ages)  # shape = (n_ages,)
-
-    # 2) level 0, 2, 3 노드만 선택 (문자열 → 정수 변환)
-    target_levels = {0, 2, 3}
-    nodes = []
-    for nid_str, data in region_id_graph.nodes(data=True):
-        level = data.get('level', None)
-        if level in target_levels:
-            try:
-                nid_int = int(nid_str)
-            except (TypeError, ValueError):
-                continue
-            nodes.append((nid_int, level, id_to_name.get(nid_int, str(nid_int))))
-
-    # 3) 연도 × 노드 루프 돌면서 예측
-    rows = []
-    for year in years:
-        for loc_id, level, loc_name in nodes:
-            try:
-                # 스칼라: prevalence & cases (샘플벡터)
-                res_scalar = predict_for(
-                    pm_model,
-                    idata,
-                    root_area='Global',
-                    root_sex='Both',
-                    root_year='all',
-                    location_id=loc_id,
-                    sex_name='Both',
-                    year_id=int(year),
-                    population_weighted=True,
-                    lower=0.0,
-                    upper=1.0,
-                    include_covariates=True,
-                    return_scalar=True,   # {"prevalence": (n_samples,), "cases": (n_samples,)}
-                )
-                prev_samples  = res_scalar["prevalence"]
-                cases_samples = res_scalar["cases"]
-
-                # 연령표준화 prevalence: 곡선 × age_weights
-                preds_curve = predict_for(
-                    pm_model,
-                    idata,
-                    root_area='Global',
-                    root_sex='Both',
-                    root_year='all',
-                    location_id=loc_id,
-                    sex_name='Both',
-                    year_id=int(year),
-                    population_weighted=True,
-                    lower=0.0,
-                    upper=1.0,
-                    include_covariates=True,
-                    return_scalar=False,  # (n_samples, n_ages)
-                )
-                if preds_curve.ndim != 2 or preds_curve.shape[1] != len(age_w):
-                    raise ValueError(
-                        f"preds_curve shape {preds_curve.shape} does not match age_weights length {len(age_w)}."
-                    )
-                # (n_samples, n_ages) @ (n_ages,) -> (n_samples,)
-                prev_std_samples = preds_curve @ age_w
-
-                # 요약 통계
-                mean_prev     = float(np.mean(prev_samples))
-                lower_prev    = float(np.percentile(prev_samples, 2.5))
-                upper_prev    = float(np.percentile(prev_samples, 97.5))
-
-                mean_cases    = float(np.mean(cases_samples))
-                lower_cases   = float(np.percentile(cases_samples, 2.5))
-                upper_cases   = float(np.percentile(cases_samples, 97.5))
-
-                mean_prev_std   = float(np.mean(prev_std_samples))
-                lower_prev_std  = float(np.percentile(prev_std_samples, 2.5))
-                upper_prev_std  = float(np.percentile(prev_std_samples, 97.5))
-
-                rows.append({
-                    "location_id":     loc_id,
-                    "location_name":   loc_name,
-                    "level":           level,
-                    "year":            int(year),
-                    "mean_prev":       mean_prev,
-                    "lower_prev":      lower_prev,
-                    "upper_prev":      upper_prev,
-                    "mean_cases":      mean_cases,
-                    "lower_cases":     lower_cases,
-                    "upper_cases":     upper_cases,
-                    "mean_prev_std":   mean_prev_std,
-                    "lower_prev_std":  lower_prev_std,
-                    "upper_prev_std":  upper_prev_std,
-                })
-
-            except ValueError as e:
-                print(f"[world_predict] Skip {loc_id} ({loc_name}), year={year}, reason: {e}")
-            except Exception as e:
-                print(f"[world_predict] Error at {loc_id} ({loc_name}), year={year}: {e}")
-
-    # 4) DataFrame / CSV 저장
-    if len(rows) == 0:
-        print("[world_predict] Warning: no rows computed; CSV not written.")
-        return pd.DataFrame(columns=[
-            "location_id","location_name","level","year",
-            "mean_prev","lower_prev","upper_prev",
-            "mean_cases","lower_cases","upper_cases",
-            "mean_prev_std","lower_prev_std","upper_prev_std",
-        ])
-
-    df = (
-        pd.DataFrame(rows)
-        .sort_values(["year","level","location_name"])
-        .reset_index(drop=True)
-    )
-    df.to_csv(output_csv_path, index=False)
-    print(f"[world_predict] Saved {len(df)} rows to '{output_csv_path}'")
-
-    return df
