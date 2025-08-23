@@ -11,7 +11,6 @@ import arviz as az
 import warnings
 import matplotlib.pyplot as plt
 import random
-import geopandas as gpd
 import matplotlib.pyplot as plt
 
 import model.spline as spline
@@ -192,7 +191,7 @@ def data_bars(df, style='book', color='black', label=None, max=500):
 ################################################################################
 
 
-def initiliaze_pipeline(input_data_path, output_template_path, parameters_path, hierarchy_path, detailed_pop_path, verbose=False):
+def initialize_pipeline(input_data_path, output_template_path, parameters_path, hierarchy_path, detailed_pop_path, verbose=False):
     ############## 1. Load inputs data ##########################################
     input_data      = pd.read_csv(input_data_path)
     output_template = pd.read_csv(output_template_path)
@@ -287,7 +286,6 @@ def generate_pymc_objects(
     ############# 2. Filter input_data and parameters by data_type (optional: lower_bound) #####################
     input_data          = pm_model.shared_data['input_data']
     data                = input_data[input_data['data_type'] == data_type]
-    lb_data             = input_data[input_data['data_type'] == lower_bound] if lower_bound else None ######!!!!!!!!!!!!!!ERROR
     params_of_data_type = pm_model.shared_data['parameters'][data_type]    
     
     pm_model.shared_data['data']                = data
@@ -365,6 +363,8 @@ def generate_pymc_objects(
     data['effective_sample_size'] = ess
     print(f"Standard errors replaced: {num_se_augmented}")
     print(f"Effective sample sizes filled: {num_ess_augmented}")
+
+    pm_model.shared_data['data'] = data
 
 
     ############# I. Generate PYMC objects #########################################################
@@ -461,31 +461,6 @@ def generate_pymc_objects(
         ############ Covariate Level Constraints #########################################################
         if include_covariates:
             priors.covariate_level_constraints(X_centering, X_scaling, beta, U, alpha, constrained_mu_age)
-
-        # ############ Lower Bound #########################################################################
-        # if lb_data is not None and len(lb_data) > 0:
-        #     lb = {}
-        #     mu_interval_lb = age_groups.age_standardize_approx(mu_age=constrained_mu_age, use_lb_data=True)
-
-        #     if include_covariates:
-        #         pi_lb, _, _, _, _, _, _, _, _, _, _ = covariates.mean_covariate_model(mu=mu_interval_lb, use_lb_data=True)
-        #     else:
-        #         pi_lb = mu_interval_lb
-
-        #     delta_lb = covariates.dispersion_covariate_model(lower=1e12, upper=1e13, use_lb_data=True)
-
-        #     se_lb = lb_data['standard_error'].mask(
-        #         lb_data['standard_error'].le(0) | lb_data['standard_error'].isna(),
-        #         (lb_data['upper_ci'] - lb_data['lower_ci']) / (2 * 1.96)
-        #     )
-        #     ess_lb = lb_data['effective_sample_size'].fillna(
-        #         lb_data['value'] * (1 - lb_data['value']) / se_lb**2
-        #     )
-        #     lb_data['standard_error'] = se_lb
-        #     lb_data['effective_sample_size'] = ess_lb
-
-        #     likelihood.neg_binom_lower_bound(pi=pi_lb, delta=delta_lb)
-
 
         ############ Store Reuseable Variables for predict_for() #########################################################
         if include_covariates:
@@ -661,8 +636,12 @@ def predict_for(
 
     # -------------------- 0) baseline mu_age (draw x age) --------------------
     arr = idata.posterior['constrained_mu_age_p'].values
-    n_chain, n_draw, n_ages = arr.shape                 # (C, S, A)
-    mu_trace = arr.reshape((n_chain * n_draw, n_ages))  # (n_samples, n_ages)
+    n_chain, n_draw, n_ages = arr.shape
+    mu_trace = arr.reshape((n_chain*n_draw, n_ages))
+
+    ages = np.asarray(pm_model.shared_data['ages'], dtype=float)
+    assert len(ages) == n_ages, f"Age axis mismatch: len(ages)={len(ages)} vs n_ages={n_ages}"
+
     n_samples = mu_trace.shape[0]
     age_index = np.arange(n_ages)
 
@@ -672,6 +651,8 @@ def predict_for(
 
     # -------------------- 1) 공변량/RE 미포함 모드 --------------------
     if not include_covariates:
+        if den == 0 or not np.isfinite(den):
+            raise ValueError("den is zero or non-finite.")
         # leaf(국가) 수집
         if location_id in region_id_graph:
             leaf_ids = [n for n in nx.bfs_tree(region_id_graph, location_id)
@@ -865,26 +846,38 @@ def _safe_sigma(sigma_const):
         return 1.0
 
 # ------------ 헬퍼: 성별 포함 strict 인구 가중치 ------------
-def _pop_weights_for_leaf(detailed_pop_df, leaf_id, year_id, age_index, sex_name: str):
-    """
-    strict: 요청한 (leaf_id, year_id, sex_name)의 인구가 없으면 ValueError.
-    detailed_pop schema:
-      location_id, location_name, sex_id, sex_name, age, year_id, value
-    """
-    leaf_id = int(leaf_id)
-    year_id = int(year_id)
+def _pop_weights_for_leaf(dpop, leaf_id, year_id, ages, sex_name):
+    ages = np.asarray(ages, dtype=float)
 
-    sel = detailed_pop_df[
-        (detailed_pop_df['location_id'] == leaf_id) &
-        (detailed_pop_df['year_id'] == year_id) &
-        (detailed_pop_df['sex_name'] == sex_name)
-    ]
+    df = dpop.copy()
+    df['location_id'] = df['location_id'].astype(int)
+    df['year_id']     = df['year_id'].astype(int)
+    df['sex_name']    = df['sex_name'].astype(str).str.strip()
+    df['age']         = df['age'].astype(float)
+
+    sel = df[(df['location_id']==int(leaf_id)) &
+             (df['year_id']==int(year_id)) &
+             (df['sex_name']==str(sex_name).strip())]
+
     if sel.empty:
-        raise ValueError(f"[pop_weights] Missing population for loc={leaf_id}, year={year_id}, sex={sex_name}")
+        raise ValueError(f"[pop_weights] missing: loc={leaf_id}, year={year_id}, sex={sex_name}")
 
+    # 중복 나이 집계 후 정확 라벨로 reindex
+    sel = sel.groupby('age', as_index=False, sort=False)['value'].sum()
     s = sel.set_index('age')['value']
-    w = s.reindex(age_index).fillna(0.0).to_numpy(dtype=float)
+    idx = pd.Index(ages)
+    w = s.reindex(idx).fillna(0.0).to_numpy(float)
+
+    # 커버리지 경고/에러
+    covered = (w > 0).sum()
+    if covered == 0:
+        pop_min, pop_max = float(sel['age'].min()), float(sel['age'].max())
+        raise ValueError(
+            f"[pop_weights] no overlapping ages: model [{ages.min()}..{ages.max()}], "
+            f"pop [{pop_min}..{pop_max}] for loc={leaf_id}, year={year_id}, sex={sex_name}"
+        )
     return w
+
 
 
 

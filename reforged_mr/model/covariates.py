@@ -198,43 +198,52 @@ def build_alpha(
         )
 
     # 3) sum-to-zero 제약 (zero_re=True) 처리
+    # sum-to-zero (reparam) — 권장 구현
     if zero_re:
         idx_map = {c: i for i, c in enumerate(U.columns)}
         for parent in region_id_graph.nodes:
-            # 자식 노드 중 U.columns에 있는 것만 필터
-            children = [
-                c for c in region_id_graph.successors(parent)
-                if c in idx_map
-            ]
-            # 형제가 2개 이상일 때만 sum-to-zero 제약 적용
+            children = [c for c in region_id_graph.successors(parent) if c in idx_map]
             if len(children) < 2:
                 continue
 
-            # 첫 번째 자식 인덱스
-            i0 = idx_map[children[0]]
-            spec0 = parameters.get('random_effects', {}).get(children[0])
-            # 첫 자식이 Constant prior이면 건너뛰기
-            if spec0 and spec0.get('dist') == 'Constant':
+            # 형제 중 Constant는 상수로 분리
+            const_sum = 0.0
+            free_children = []
+            for c in children:
+                spec = parameters.get('random_effects', {}).get(c)
+                if spec and spec.get('dist') == 'Constant':
+                    const_sum += float(spec.get('mu', 0.0))
+                else:
+                    free_children.append(c)
+
+            # 자유변수가 2개 이상일 때만 합=0 강제 (1개면 제약 불필요)
+            if len(free_children) < 2:
                 continue
 
-            # 나머지 형제들 인덱스
-            sibs = [idx_map[c] for c in children[1:]]
-            # alpha[i0] = - sum(alpha[sibs])
-            det = pm.Deterministic(
-                f'alpha_det_{data_type}_{i0}',
-                -sum(alpha[i] for i in sibs)
-            )
-            old = alpha[i0]
-            alpha[i0] = det
+            # pivot은 첫 자유형제를 결정변수로 만들고 나머지(len-1)만 RV로 둠
+            pivot = free_children[0]
+            rest  = free_children[1:]
 
-            # 기존 stochastic이면 그 logp를 Potential로 보존
-            if isinstance(old, pm.Distribution):
-                alpha_potentials.append(
-                    pm.Potential(
-                        f'alpha_pot_{data_type}_{children[0]}',
-                        old.logp(det)
-                    )
-                )
+            # 기존에 만들어둔 alpha[pivot], alpha[rest]는 쓰지 않고 대체(중복생성 피하려면
+            # build_alpha에서 그룹 단위로 생성하는 쪽으로 구조를 옮기는 게 가장 깔끔합니다)
+            rest_rvs = []
+            for child in rest:
+                j = idx_map[child]
+                # child의 레벨별 sigma 가져오기
+                sigma_j = sigma_alpha[region_id_graph.nodes[child]['level']]
+                # 기존 이름 유지 또는 새 이름
+                rv = pm.Normal(f'alpha_{data_type}_{child}', mu=0.0, sigma=sigma_j, initval=0.0)
+                alpha[j] = rv
+                rest_rvs.append(rv)
+
+            # pivot = - (sum(rest_rvs) + const_sum)
+            j0 = idx_map[pivot]
+            det = pm.Deterministic(
+                f'alpha_{data_type}_{pivot}',
+                - (sum(rest_rvs) + const_sum)
+            )
+            alpha[j0] = det
+
 
     return alpha, const_alpha_sigma, alpha_potentials
 
