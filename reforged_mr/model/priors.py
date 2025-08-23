@@ -3,103 +3,177 @@ import pymc as pm
 import pytensor.tensor as at
 
 
-def similar(child_curve, parent_curve, sigma_parent, sigma_diff, eps=1e-9, penalty_name=""):
+def similar(
+    child_curve,
+    parent_curve,
+    sigma_parent,      # 선형 스케일 표준편차(연령별 벡터/스칼라 모두 허용)
+    eps=1e-9,
+    penalty_name="",
+    sigma_diff_log=0.0 # (선택) 구조적 차이 허용, 문헌식과 동일하려면 0으로 두세요
+):
+    pm_model = pm.modelcontext(None)
+    label    = pm_model.shared_data.get("data_type", "")
+
+    ylog = at.log(child_curve  + eps)
+    mlog = at.log(parent_curve + eps)
+
+    sigma_log = (at.as_tensor_variable(sigma_parent) + eps) / (parent_curve + eps)
+    if sigma_diff_log and float(sigma_diff_log) > 0:
+        sigma_log = pm.math.sqrt(sigma_log**2 + float(sigma_diff_log)**2)
+
+    # 안전 바닥(0 분산 방지)
+    sigma_log = pm.math.clip(sigma_log, 1e-12, np.inf)
+
+    lp = pm.logp(pm.Normal.dist(mu=mlog, sigma=sigma_log), ylog)
+    return pm.Potential(f"parent_similarity_{label}{penalty_name}", at.sum(lp))
+
+
+def level_constraints(data_type: str, unconstrained_mu_age: at.TensorVariable):
     """
-    Softly shrink child_curve toward parent_curve on the log scale.
+    Clip `unconstrained_mu_age` to a fixed level outside [age_before, age_after],
+    and softly penalize deviation from the original *within* that interval.
+
+    Requires coords to be pre-registered:
+      - coords['age'] : age grid (length N)
     """
-    model      = pm.modelcontext(None) # reforged_mr - similar()
-    label      = model.shared_data["data_type"]
-    # determine precision τ
-    if hasattr(parent_curve, "distribution"):
-        tau = 1/(sigma_parent**2 + sigma_diff**2)
-    else:
-        tau = 1/(((sigma_parent + eps)/(parent_curve + eps))**2 + sigma_diff**2)
-    # log‐values, clipped to avoid log(0)
-    log_child  = at.log(pm.math.clip(child_curve,  eps, np.inf))
-    log_parent = at.log(pm.math.clip(parent_curve, eps, np.inf))
-    # elementwise log-density, then sum into one potential
-    lp = pm.logp(
-        pm.Normal.dist(mu=log_parent, sigma=1/pm.math.sqrt(tau)),
-        log_child
+    pm_model = pm.modelcontext(None)
+    sd       = pm_model.shared_data
+    params_of_data_type   = sd["parameters"][data_type]
+
+    if ("level_value" not in params_of_data_type) or ("level_bounds" not in params_of_data_type):
+        return unconstrained_mu_age
+
+    # ---- guards ----
+    if "age" not in pm_model.coords:
+        raise ValueError("coords['age'] is missing. Register it upstream.")
+    ages = np.asarray(pm_model.coords["age"], dtype=float)
+    if ages.ndim != 1 or ages.size == 0:
+        raise ValueError("coords['age'] must be a 1D non-empty array.")
+
+    # ---- config ----
+    lv = params_of_data_type["level_value"]
+    lb = float(params_of_data_type["level_bounds"]["lower"])
+    ub = float(params_of_data_type["level_bounds"]["upper"])
+    if not (np.isfinite(lb) and np.isfinite(ub) and lb < ub):
+        raise ValueError(f"Invalid level_bounds: lower={lb}, upper={ub}")
+
+    level_value = float(lv["value"])
+    age_before  = float(lv["age_before"])
+    age_after   = float(lv["age_after"])
+
+    if age_after < age_before:
+        raise ValueError(f"'age_after' ({age_after}) must be >= 'age_before' ({age_before}).")
+
+    # ---- map ages → index range using searchsorted (grid spacing may be != 1) ----
+    i_start = int(np.clip(np.searchsorted(ages, age_before, side="left"),  0, ages.size - 1))
+    i_end   = int(np.clip(np.searchsorted(ages, age_after,  side="right") - 1, 0, ages.size - 1))
+
+    idx = at.arange(ages.size)
+    val = at.as_tensor_variable(level_value)
+
+    ### Clipping ###
+    # ---- hard clipping age before and after ----
+    mid   = at.switch((idx >= i_start) & (idx <= i_end), unconstrained_mu_age, val)
+    clipped = at.switch(idx < i_start, val, at.switch(idx > i_end, val, mid))
+
+    constrained = pm.Deterministic(
+        f"constrained_mu_age_{data_type}",
+        at.clip(clipped, lb, ub),
+        dims=("age",),
     )
-    pm.Potential(f"parent_similarity_{label}{penalty_name}", pm.math.sum(lp))
+
+    # ---- soft similarity penalty ONLY within [i_start, i_end] ----
+    if i_end >= i_start:
+        child_slice  = constrained[i_start : i_end + 1]
+        parent_slice = unconstrained_mu_age[i_start : i_end + 1]
+        similar(
+            child_curve     = child_slice,
+            parent_curve    = parent_slice,
+            sigma_parent    = 0.0,     # parent treated as fixed target
+            sigma_diff_log  = 0.01,    # small allowance in log-space
+            eps             = 1e-6,
+            penalty_name    = "_level_constraints",
+        )
+
+    return constrained
 
 
-def level_constraints(unconstrained_mu_age: at.TensorVariable):
-    """
-    Hard-clip unconstrained_mu_age outside [before, after] to a fixed value,
-    then softly penalize deviation from the original in between.
-    """
-    pm_model      = pm.modelcontext(None) # reforged_mr - level_constraints()
-    label      = pm_model.shared_data["data_type"]
-    ages       = pm_model.shared_data["ages"]
-    params     = pm_model.shared_data["params_of_data_type"]
-    # exit if no level constraints provided
-    if not ("level_value" in params and "level_bounds" in params):
-        return unconstrained_mu_age, unconstrained_mu_age, None
+def derivative_constraints(data_type: str, mu_age: at.TensorVariable):
+    pm_model = pm.modelcontext(None)
+    sd       = pm_model.shared_data
 
-    lv   = params["level_value"]
-    lb   = params["level_bounds"]["lower"]
-    ub   = params["level_bounds"]["upper"]
-    # map ages to indices
-    start = int(np.clip(lv["age_before"] - ages[0], 0, ages.size))
-    end   = int(np.clip(lv["age_after"]  - ages[0], 0, ages.size))
-    idx   = at.arange(ages.size)
-    val   = float(lv["value"])
-
-    # piecewise: val before start, raw in [start,end], val after end
-    clipped = at.switch(idx < start, val,
-                at.switch(idx > end, val, unconstrained_mu_age))
+    # --- params 로드 ---
+    params_of_data_type = sd["parameters"][data_type]
+    inc = params_of_data_type.get("increasing")
+    dec = params_of_data_type.get("decreasing")
+    if not inc and not dec:
+        return None  
     
-    pm_model.add_coord("age", ages)
-    constrained_mu_age = pm.Deterministic(name=f"constrained_mu_age_{label}", var=at.clip(clipped, lb, ub), dims=("age",))
-    # add similarity potential back to the raw curve
-    similar(
-        child_curve      = constrained_mu_age,
-        parent_curve     = unconstrained_mu_age,
-        sigma_parent     = 0.0,
-        sigma_diff       = 0.01,
-        eps              = 1e-6,
-        penalty_name     = "_level_constraints"
-    )
-    return constrained_mu_age
+    # --- coords['age'] 필수 ---
+    if "age" not in pm_model.coords:
+        raise ValueError("coords['age'] is missing. Register it upstream.")
+    ages = np.asarray(pm_model.coords["age"], dtype=float)
+    if ages.ndim != 1 or ages.size < 2:
+        raise ValueError("coords['age'] must be a 1D array with length >= 2.")
+    if np.any(np.diff(ages) <= 0):
+        raise ValueError("coords['age'] must be strictly increasing.")
 
 
-def derivative_constraints(mu_age: at.TensorVariable):
-    """
-    Enforce monotonicity by heavily penalizing negative (or positive)
-    finite-differences on specified age-ranges.
-    """
-    model      = pm.modelcontext(None) # reforged_mr - derivative_constraints()
-    ages       = model.shared_data["ages"]
-    params     = model.shared_data["params_of_data_type"]
-    inc, dec   = params.get("increasing"), params.get("decreasing")
-    if not (inc and dec):
-        return {}
+    # --- helper: [a_start, a_end] → diff 인덱스 구간 [i0, i1_excl] (on diff(mu) of length N-1) ---
+    def _diff_span(a_start, a_end, grid):
+        if a_end < a_start:
+            raise ValueError(f"age_end ({a_end}) must be >= age_start ({a_start}).")
+        N = grid.size
+        # age 인덱스 범위(포함)
+        i_start_age = int(np.searchsorted(grid, float(a_start), side="left"))
+        i_end_age   = int(np.searchsorted(grid, float(a_end), side="right") - 1)
+        i_start_age = max(0, min(i_start_age, N - 1))
+        i_end_age   = max(0, min(i_end_age,   N - 1))
+        # diff 인덱스는 0..N-2, 각 항은 (age[i+1]-age[i])에 대응
+        i0 = i_start_age
+        i1_excl = min(i_end_age, N - 2) + 1  # 포함 끝 → 슬라이스 끝+1
+        if i1_excl <= i0:
+            return None
+        return (i0, i1_excl)
 
-    # helper to turn an age into a safe diff-index
-    def to_idx(age_val):
-        idx = age_val - ages[0]
-        return int(np.clip(idx, 0, len(ages) - 1))
+    # --- overlap 검사---
+    if inc and dec:
+        a_inc_start, a_inc_end = float(inc["age_start"]), float(inc["age_end"])
+        a_dec_start, a_dec_end = float(dec["age_start"]), float(dec["age_end"])
+        if max(a_inc_start, a_dec_start) <= min(a_inc_end, a_dec_end):
+            raise ValueError(
+                f"Increasing [{a_inc_start}, {a_inc_end}] overlaps with decreasing [{a_dec_start}, {a_dec_end}]."
+            )
 
-    i0, i1 = to_idx(inc["age_start"]), to_idx(inc["age_end"])
-    d0, d1 = to_idx(dec["age_start"]), to_idx(dec["age_end"])
+    # --- diff와 위반량 계산 ---
+    diff = at.diff(mu_age)  # shape: (len(ages)-1,)
+    terms = []
 
-    assert i1 <= d0 or d1 <= i0, (
-        f"Increasing range [{inc['age_start']}, {inc['age_end']}] overlaps "
-        f"with decreasing range [{dec['age_start']}, {dec['age_end']}]."
-    )
+    if inc:
+        span = _diff_span(inc["age_start"], inc["age_end"], ages)
+        if span is not None:
+            s, e = span
+            # 증가 구간에서 음의 기울기(<=0) 벌점
+            inc_viol = at.sum(at.clip(diff[s:e], -np.inf, 0.0))
+            terms.append(inc_viol**2)
 
-    diff = at.diff(mu_age)
-    inc_viol = at.sum(at.clip(diff[i0:i1], -np.inf,   0.0))
-    dec_viol = at.sum(at.clip(diff[d0:d1],   0.0, np.inf))
+    if dec:
+        span = _diff_span(dec["age_start"], dec["age_end"], ages)
+        if span is not None:
+            s, e = span
+            # 감소 구간에서 양의 기울기(>=0) 벌점
+            dec_viol = at.sum(at.clip(diff[s:e], 0.0, np.inf))
+            terms.append(dec_viol**2)
 
-    penalty = inc_viol**2 + dec_viol**2
-    logp    = -1e12 * penalty
+    if not terms:
+        return None
 
-    pm.Potential(
-        name=f"mu_age_derivative_potential_{model.shared_data['data_type']}",
-        var=logp
+    penalty = terms[0] if len(terms) == 1 else at.sum(at.stack(terms))
+    logp    = -1e12 * penalty  
+
+    return pm.Potential(
+        name=f"mu_age_derivative_potential_{data_type}",
+        var=logp,
     )
 
 
@@ -110,11 +184,12 @@ def covariate_level_constraints(X_centering, X_scaling, beta, U, alpha, mu_age) 
     """
     # --------------------------- 1) Initialize PyMC model ---------------------------   
     pm_model = pm.modelcontext(None)  # reforged_mr/model/priors/covariate_level_constraints()
+    sd = pm_model.shared_data
 
     # --------------------------- 2) Extract shared data -----------------------------   
-    data_type       = pm_model.shared_data["data_type"]
-    region_id_graph = pm_model.shared_data["region_id_graph"]
-    params          = pm_model.shared_data["params_of_data_type"]
+    data_type       = sd["data_type"]
+    region_id_graph = sd["region_id_graph"]
+    params          = sd["params_of_data_type"]
 
     lvl    = params.get('level_value')
     bounds = params.get('level_bounds')

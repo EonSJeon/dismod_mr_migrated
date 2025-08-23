@@ -14,15 +14,11 @@ import random
 import matplotlib.pyplot as plt
 
 import model.spline as spline
-print(spline.__file__)
 import model.priors as priors
-print(priors.__file__)
 import model.age_groups as age_groups
-print(age_groups.__file__)
 import model.covariates as covariates
-print(covariates.__file__)
 import model.likelihood as likelihood
-print(likelihood.__file__)
+
 
 
 ################################################################################
@@ -142,8 +138,6 @@ def inspect_model(model, var_name=None, show_shared_data=False):
             except Exception as e:
                 print(f"  • Could not evaluate variable: {e}")
 
-
-
 ########### check rhat condition ##########################################################
 def return_rhat(idata):
     warnings.filterwarnings(
@@ -164,248 +158,198 @@ def return_rhat(idata):
     return summary_df
 
 
-
-########### visualize the data ###################################################
-def data_bars(df, style='book', color='black', label=None, max=500):
-    colors = ['#e41a1c', '#377eb8', '#4daf4a', '#984ea3', '#ff7f0', '#ffff33']
-    bars = list(zip(df['age_start'], df['age_end'], df['value']))
-    if len(bars) > max:
-        bars = random.sample(bars, max)
-
-    x, y = [], []
-    for a0, a1, v in bars:
-        x += [a0, a1, np.nan]
-        y += [v, v, np.nan]
-
-    if style == 'book':
-        plt.plot(x, y, 's-', mew=1, mec='w', ms=4, color=color, label=label)
-    elif style == 'talk':
-        plt.plot(x, y, 's-', mew=1, mec='w', ms=0, alpha=1.0, color=colors[2], linewidth=15, label=label)
-    else:
-        raise ValueError(f'Unrecognized style: {style}')
-
-
-
 ################################################################################
 #########################   MAIN FUNCTIONS   ###################################
 ################################################################################
 
 
-def initialize_pipeline(input_data_path, output_template_path, parameters_path, hierarchy_path, detailed_pop_path, verbose=False):
-    ############## 1. Load inputs data ##########################################
+def initialize_pipeline(
+    input_data_path,
+    output_template_path,
+    parameters_path,
+    hierarchy_path,
+    detailed_pop_path,
+    verbose=False,
+):
+    # ---------- 1) Load ----------
     input_data      = pd.read_csv(input_data_path)
     output_template = pd.read_csv(output_template_path)
     detailed_pop    = pd.read_csv(detailed_pop_path)
-    parameters      = load_any(parameters_path)    
-    hierarchy       = load_any(hierarchy_path)       
-    # nodes_to_fit    = load_any(f'{filepath}/nodes_to_fit.json') 
+    parameters      = load_any(parameters_path)
+    hierarchy       = load_any(hierarchy_path)
 
-    # create region_id_graph with hierarchy
-    nodes = hierarchy['nodes']
-    name_to_id = {} # NOTE: this can't handle duplicate names
-    id_to_name = {}
+    # ---------- 2) Build directed tree (parent -> child), id-only ----------
+    nodes = hierarchy["nodes"] 
+    G = nx.DiGraph()
+    id_to_name: dict[int, str] = {}
 
-    region_id_graph = nx.DiGraph()
     for node in nodes:
-        node_id = int(node[0])
-        node_name = node[1]['location_name']
-        node_level = int(node[1]['level'])
-        node_parent_id = int(node[1]['parent_id'])
+        node_id        = int(node[0])
+        attrs          = node[1]
+        node_name      = attrs["location_name"]
+        node_level     = int(attrs["level"])
+        node_parent_id = int(attrs["parent_id"])
 
-        name_to_id[node_name] = node_id
+        G.add_node(
+            node_id,
+            level=node_level,
+            parent_id=node_parent_id,
+            name=node_name,
+        )
+        if node_id != node_parent_id:  # skip self-edge for the root
+            G.add_edge(node_parent_id, node_id)
+
         id_to_name[node_id] = node_name
 
-        # add nodes with location_id as the key
-        region_id_graph.add_node(
-                                node_id,           # location_id is the node key
-                                level = node_level,
-                                parent_id = node_parent_id,
-                                name = node_name
-                                )
+    # ---------- 3) Validate: directed tree (arborescence) ----------
+    roots = [n for n, indeg in G.in_degree() if indeg == 0]
+    if len(roots) != 1:
+        raise ValueError(f"Hierarchy must have exactly one root (found {roots}).")
+    global_id = roots[0]
 
-        # add edges between nodes (ignore root node)
-        if node_id != node_parent_id: # ignores root node
-            region_id_graph.add_edge(node_parent_id, node_id)
-    
-    assert nx.is_tree(region_id_graph), "region_id_graph is not a tree"
+    if not nx.is_arborescence(G):
+        bad_indeg = [n for n, d in G.in_degree()
+                     if (n == global_id and d != 0) or (n != global_id and d != 1)]
+        reachable = set(nx.descendants(G, global_id)) | {global_id}
+        orphans   = [n for n in G.nodes if n not in reachable]
+        raise ValueError(
+            "region_id_graph is not a directed tree (arborescence). "
+            f"violations: indegree_bad={bad_indeg}, orphans={orphans}"
+        )
+    depth_by_node = nx.single_source_shortest_path_length(G, global_id)
+    max_depth = (int(max(depth_by_node.values())) if depth_by_node else 0)+ 1
 
-    # # since the graph is a tree, the number of nodes should be equal to the number of edges + 1
-    # assert region_id_graph.number_of_nodes() == region_id_graph.number_of_edges() + 1, \
-    #     "number of nodes should be equal to the number of edges + 1"
-    
-    ############## 2. Initialize pm.Model() and shared_data #####################
+    # ---------- 4) Create model & attach shared data ----------
     pm_model = pm.Model()
-    pm_model.shared_data = {     # NOTE: this is what used to be "vars" from class ModelVars
-        "input_data"             : input_data,
-        "output_template"        : output_template,
-        "region_id_graph"        : region_id_graph,
-        "id_to_name"             : id_to_name,
-        "name_to_id"             : name_to_id,
-        "parameters"             : parameters,
-        "detailed_pop"           : detailed_pop,
+    pm_model.shared_data = {
+        "input_data"      : input_data,
+        "output_template" : output_template,
+        "region_id_graph" : G,
+        "id_to_name"      : id_to_name,   
+        "parameters"      : parameters,
+        "detailed_pop"    : detailed_pop,
+        "global_id"    : global_id,
+        "max_depth"     : max_depth,
     }
 
     if verbose:
-        print(f'number of rows: {len(input_data)}')
-        print(f'number of unique location_id: {input_data["location_id"].nunique()}')
-        print(f"number of nodes: {region_id_graph.number_of_nodes()}") 
-        print(f"number of edges: {region_id_graph.number_of_edges()}")
-        
+        n_nodes = G.number_of_nodes()
+        n_edges = G.number_of_edges()
+        print(f"#rows(input_data): {len(input_data)}")
+        print(f"#unique location_id: {input_data['location_id'].nunique()}")
+        print(f"#nodes: {n_nodes}, #edges: {n_edges}, global_id: {global_id} ({id_to_name.get(global_id)})")
+
     return pm_model
-
-
 
 def generate_pymc_objects(
         pm_model, 
         data_type            = 'p',
-        lower_bound          = None,
-        interpolation_method = 'linear',
-        include_covariates   = True,
         mu_age               = None,
         mu_age_parent        = None,
         sigma_age_parent     = None,
-        reference_area       = 'Global',
+        reference_area_id    = None,
         reference_sex        = 'Both',
         reference_year       = 'all',
-        rate_type            = 'neg_binom',
-        zero_re              = True
     ):
+    sd = pm_model.shared_data
 
-    ############# 1. Store Parameters to shared_data #########################################################
-    pm_model.shared_data['data_type']            = data_type
-    pm_model.shared_data['interpolation_method'] = interpolation_method
-    pm_model.shared_data['mu_age']               = mu_age
-    pm_model.shared_data['mu_age_parent']        = mu_age_parent
-    pm_model.shared_data['sigma_age_parent']     = sigma_age_parent
-    pm_model.shared_data['reference_area_id']    = pm_model.shared_data['name_to_id'][reference_area]
-    pm_model.shared_data['reference_sex']        = reference_sex
-    pm_model.shared_data['reference_year']       = reference_year
-    pm_model.shared_data['rate_type']            = rate_type
-    pm_model.shared_data['zero_re']              = zero_re
+    # ----------------------------------------------------------------------
+    # 1) 참조 축(지역/성/연도) 및 부모 곡선 정보를 shared_data에 저장
+    #    - 이후 예측/제약/경로 계산 등에서 공통 참조로 사용
+    # ----------------------------------------------------------------------
+    if reference_area_id is None:
+        reference_area_id = sd['global_id']
 
-    ############# 2. Filter input_data and parameters by data_type (optional: lower_bound) #####################
-    input_data          = pm_model.shared_data['input_data']
-    data                = input_data[input_data['data_type'] == data_type]
-    params_of_data_type = pm_model.shared_data['parameters'][data_type]    
+    sd['reference_area_id'] = reference_area_id
+    sd['reference_sex']     = reference_sex
+    sd['reference_year']    = reference_year
+
+    sd[f'mu_age_parent_{data_type}']    = mu_age_parent
+    sd[f'sigma_age_parent_{data_type}'] = sigma_age_parent
     
-    pm_model.shared_data['data']                = data
-    pm_model.shared_data['params_of_data_type'] = params_of_data_type
+    # ----------------------------------------------------------------------
+    # 2) data_type별 파라미터/설정 로드
+    #    - parameters.json(c)에서 현재 data_type 블록만 추출
+    #    - 옵션 미지정 시 기본값을 사용
+    # ----------------------------------------------------------------------
+    parameters         = sd['parameters']
+    params_of_data_type = parameters[data_type]
 
-    ############# 3. Fetch ages and age_weights from parameters #####################
-    parameters   = pm_model.shared_data['parameters']
-    ages         = np.array(parameters['ages'], dtype=np.float64)
-    ages_weights = np.array(parameters['age_weights'], dtype=np.float64)
-
-    pm_model.shared_data['ages']        = ages
-    pm_model.shared_data['age_weights'] = ages_weights
-
-    ############# 4. Generate knots and smoothing for spline.spline #########################################################
-    knots = np.array(params_of_data_type.get('parameter_age_mesh', np.arange(ages[0], ages[-1] + 1, 5)), dtype=np.float64)
-    if knots[-1] != ages[-1]:
-        knots = np.concatenate([knots, [ages[-1]]])
-    pm_model.shared_data['knots']    = knots 
+    include_covariates = params_of_data_type.get('include_covariates', True)
+    rate_type          = params_of_data_type.get('rate_type', 'neg_binom')
     
-    smooth_map = {'No Prior': np.inf, 'Slightly': 0.5, 'Moderately': 0.05, 'Very': 0.005}  # TMI: type(np.inf) == float
+    # ----------------------------------------------------------------------
+    # 3) 입력 데이터에서 현재 data_type만 필터링
+    #    - 이후 우도/공변량 계산은 이 슬라이스를 기준으로 수행
+    # ----------------------------------------------------------------------
+    input_data = sd['input_data']
+    input_data_of_data_type = input_data[input_data['data_type'] == data_type].copy()
 
-    # params_of_data_type 에서 가져온 후
-    smoothness_param = params_of_data_type.get('smoothness')
+    # ----------------------------------------------------------------------
+    # 4) 표준오차(SE)와 유효표본크기(ESS) 보정
+    #    - SE ≤ 0 또는 결측: (UCI-LCI)/(2*1.96)로 대체
+    #    - ESS 결측/음수:   이항근사 p(1-p)/SE^2 로 대체
+    #    - 보정치(카운트)를 로그로 알려줌
+    # ----------------------------------------------------------------------
+    invalid_se_mask   = (input_data_of_data_type['standard_error'] < 0) | (input_data_of_data_type['standard_error'].isna())
+    se_replacement    = (input_data_of_data_type['upper_ci'] - input_data_of_data_type['lower_ci']) / (2 * 1.96)
+    se                = input_data_of_data_type['standard_error'].mask(invalid_se_mask, se_replacement)
+    num_se_augmented  = int(invalid_se_mask.sum())
 
-    if not isinstance(smoothness_param, dict):
-        raise ValueError(
-            "‘smoothness’ must be a dict with keys "
-            "{'age_start', 'amount', 'age_end'}"
-        )
-
-    required_keys = {'age_start', 'amount', 'age_end'}
-    if set(smoothness_param.keys()) != required_keys:
-        raise ValueError(
-            "‘smoothness’ dict must contain exactly the keys "
-            f"{required_keys}, but got {set(smoothness_param.keys())}"
-        )
-
-    amount = smoothness_param['amount']
-
-    if isinstance(amount, (int, float)):
-        smoothing = float(amount)
-
-    elif isinstance(amount, str):
-        if amount not in smooth_map:
-            raise ValueError(
-                f"Invalid smoothness amount '{amount}'. "
-                f"Expected one of {list(smooth_map.keys())}."
-            )
-        smoothing = smooth_map[amount]
-
-    else:
-        raise TypeError(
-            f"‘amount’ must be int, float, or one of {list(smooth_map.keys())}, "
-            f"got {type(amount).__name__}"
-        )
-        
-    pm_model.shared_data['smoothing'] = smoothing # NOTE: smoothing is eventually just a float like 0.5
-
-    ############# 5. Check Standard Deviation and Effective Sample Size for likelihood.* #######################################
-    data = data.copy()
-    # identify rows where SE is “invalid” (< 0) or missing, and recompute them
-    invalid_se_mask = (data['standard_error'] < 0) | (data['standard_error'].isna())
-    se_replacement   = (data['upper_ci'] - data['lower_ci']) / (2 * 1.96)
-    se               = data['standard_error'].mask(invalid_se_mask, se_replacement)
-    num_se_augmented = int(invalid_se_mask.sum())
-
-    # identify rows where ESS is "invalid" (< 0) or missing, and recompute them
-    invalid_ess_mask = (data['effective_sample_size'] < 0) | (data['effective_sample_size'].isna())
-    ess_replacement  = data['value'] * (1 - data['value']) / se**2
-    ess              = data['effective_sample_size'].mask(invalid_ess_mask, ess_replacement)
+    invalid_ess_mask  = (input_data_of_data_type['effective_sample_size'] < 0) | (input_data_of_data_type['effective_sample_size'].isna())
+    ess_replacement   = input_data_of_data_type['value'] * (1 - input_data_of_data_type['value']) / se**2
+    ess               = input_data_of_data_type['effective_sample_size'].mask(invalid_ess_mask, ess_replacement)
     num_ess_augmented = int(invalid_ess_mask.sum())
 
-    # write back and report
-    data['standard_error'] = se
-    data['effective_sample_size'] = ess
+    input_data_of_data_type['standard_error']        = se
+    input_data_of_data_type['effective_sample_size'] = ess
     print(f"Standard errors replaced: {num_se_augmented}")
     print(f"Effective sample sizes filled: {num_ess_augmented}")
 
-    pm_model.shared_data['data'] = data
-
+    # ----------------------------------------------------------------------
+    # 5) 공유데이터에 슬라이스 저장 및 데이터 존재 여부 플래그
+    #    - 이후 단계(스플라인/공변량/우도)에서 사용
+    # ----------------------------------------------------------------------
+    sd[f'input_data_{data_type}'] = input_data_of_data_type
+    has_data = len(input_data_of_data_type) > 0
 
     ############# I. Generate PYMC objects #########################################################
     with pm_model:
+        # --- ages ---
+        ages = np.asarray(sd.get('ages', sd['parameters']['ages']), dtype=np.int32)
+        pm_model.add_coord("age", ages, mutable=False)
+
+
         ############ Calculating constrained_mu_age #########################################################
         if mu_age is not None:
             unconstrained_mu_age = mu_age
         else:
-            unconstrained_mu_age = spline.spline()
-        constrained_mu_age = priors.level_constraints(unconstrained_mu_age)
-        priors.derivative_constraints(mu_age=constrained_mu_age)            
+            unconstrained_mu_age = spline.spline(data_type)
+
+        constrained_mu_age = priors.level_constraints(data_type, unconstrained_mu_age=unconstrained_mu_age)
+        priors.derivative_constraints(data_type, mu_age=constrained_mu_age)            
 
         if mu_age_parent is not None: # penalize based on similarity to parent
             priors.similar(
-                mu_child         = constrained_mu_age,
-                mu_parent        = mu_age_parent,
+                child_curve         = constrained_mu_age,
+                parent_curve        = mu_age_parent,
                 sigma_parent     = sigma_age_parent,
-                sigma_difference = 0.0,
+                sigma_diff_log = 0.0,
                 eps              = 1e-9,
                 penalty_name     = "_mu_age_parent_not_none"
             )
 
         ############ Calculating Pi #########################################################
-        if len(data) > 0:
-            mu_interval = age_groups.age_standardize_approx(mu_age=constrained_mu_age)
+        if has_data:
+            mu_interval = age_groups.age_standardize_approx(data_type, mu_age=constrained_mu_age)
 
             # covariate & pi
             if include_covariates:
-                pi, U, U_ref, sigma_alpha, alpha, alpha_potentials, const_alpha_sigma, X, X_centering, X_scaling, beta, const_beta_sigma = covariates.mean_covariate_model(mu=mu_interval)
-
+                covariates.mean_covariate_model(data_type, mu_interval)
             else:
                 pi = mu_interval
-
-        if len(data) <= 0:
-            if include_covariates:
-                pi, U, U_ref, sigma_alpha, alpha, alpha_potentials, const_alpha_sigma, X, X_centering, X_scaling, beta, const_beta_sigma = covariates.mean_covariate_model(mu=None)
-            else:
-                assert False, "shouldn't be here"
-
-        ############ Likelihood based on rate_type #########################################################
-        if len(data) > 0:
+            return
+            ############ Likelihood based on rate_type #########################################################
             if rate_type == 'poisson':
                 likelihood.poisson(pi=pi)
 
@@ -457,25 +401,21 @@ def generate_pymc_objects(
 
             else:
                 raise ValueError(f'Unsupported rate_type "{rate_type}"')
-            
+
+        else:
+            if include_covariates:
+                covariates.mean_covariate_model(data_type, mu=None)
+            else:
+                assert False, "shouldn't be here"
+
         ############ Covariate Level Constraints #########################################################
         if include_covariates:
+            X_centering = sd['X_centering']
+            X_scaling   = sd['X_scaling']
+            beta        = sd['beta']
+            U           = sd['U']
+            alpha       = sd['alpha']
             priors.covariate_level_constraints(X_centering, X_scaling, beta, U, alpha, constrained_mu_age)
-
-        ############ Store Reuseable Variables for predict_for() #########################################################
-        if include_covariates:
-            pm_model.shared_data['alpha'] = alpha
-            pm_model.shared_data['const_alpha_sigma'] = const_alpha_sigma
-            pm_model.shared_data['beta'] = beta
-            pm_model.shared_data['const_beta_sigma'] = const_beta_sigma
-            pm_model.shared_data['X'] = X
-            pm_model.shared_data['X_centering'] = X_centering
-            pm_model.shared_data['X_scaling'] = X_scaling
-            pm_model.shared_data['U'] = U
-            pm_model.shared_data['U_ref'] = U_ref
-
-
-
 
 def return_map_estimate(pm_model, verbose=False):
     logging.basicConfig(level=logging.INFO)
@@ -488,8 +428,6 @@ def return_map_estimate(pm_model, verbose=False):
         
         map_estimate = pm.find_MAP()
     return map_estimate
-
-
 
 def return_idata(
     pm_model, 
@@ -565,48 +503,6 @@ def return_idata(
 
     return idata
 
-
-def visualize_pred(pred, data, save_path=None):
-    plt.figure(figsize=(10, 4))
-    data_bars(
-        df=data,
-        color='grey',
-        label='Simulated PD Data'
-    )
-
-    hpd = pm.stats.hdi(pred, hdi_prob=0.95)
-    ages = np.arange(pred.shape[1])
-
-    plt.plot(
-        ages,
-        pred.mean(axis=0),
-        'k-', linewidth=2,
-        label='Posterior Mean'
-    )
-    plt.plot(
-        ages,
-        hpd[:, 0],
-        'k--', linewidth=1,
-        label='95% HPD interval'
-    )
-    plt.plot(
-        ages,
-        hpd[:, 1],
-        'k--', linewidth=1
-    )
-
-    plt.xlabel('Age (years)')
-    plt.ylabel('Prevalence (per 1)')
-    plt.grid()
-    plt.legend(loc='upper left')
-    plt.axis(ymin=-0.001, xmin=-5, xmax=105)
-
-    # ---------- 저장 옵션 ----------
-    if save_path is not None:
-        plt.savefig(save_path, dpi=300, bbox_inches="tight")
-        print(f"✅ Figure saved to {save_path}")
-
-    plt.show()
 
 
 def predict_for(
@@ -1036,3 +932,64 @@ def _as_age_weight_vector(age_weights, ages):
     if total > 0 and np.isfinite(total):
         vec = vec / total
     return vec
+
+########### visualize the data ###################################################
+def data_bars(df, style='book', color='black', label=None, max=500):
+    colors = ['#e41a1c', '#377eb8', '#4daf4a', '#984ea3', '#ff7f0', '#ffff33']
+    bars = list(zip(df['age_start'], df['age_end'], df['value']))
+    if len(bars) > max:
+        bars = random.sample(bars, max)
+
+    x, y = [], []
+    for a0, a1, v in bars:
+        x += [a0, a1, np.nan]
+        y += [v, v, np.nan]
+
+    if style == 'book':
+        plt.plot(x, y, 's-', mew=1, mec='w', ms=4, color=color, label=label)
+    elif style == 'talk':
+        plt.plot(x, y, 's-', mew=1, mec='w', ms=0, alpha=1.0, color=colors[2], linewidth=15, label=label)
+    else:
+        raise ValueError(f'Unrecognized style: {style}')
+
+def visualize_pred(pred, data, save_path=None):
+    plt.figure(figsize=(10, 4))
+    data_bars(
+        df=data,
+        color='grey',
+        label='Simulated PD Data'
+    )
+
+    hpd = pm.stats.hdi(pred, hdi_prob=0.95)
+    ages = np.arange(pred.shape[1])
+
+    plt.plot(
+        ages,
+        pred.mean(axis=0),
+        'k-', linewidth=2,
+        label='Posterior Mean'
+    )
+    plt.plot(
+        ages,
+        hpd[:, 0],
+        'k--', linewidth=1,
+        label='95% HPD interval'
+    )
+    plt.plot(
+        ages,
+        hpd[:, 1],
+        'k--', linewidth=1
+    )
+
+    plt.xlabel('Age (years)')
+    plt.ylabel('Prevalence (per 1)')
+    plt.grid()
+    plt.legend(loc='upper left')
+    plt.axis(ymin=-0.001, xmin=-5, xmax=105)
+
+    # ---------- 저장 옵션 ----------
+    if save_path is not None:
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+        print(f"✅ Figure saved to {save_path}")
+
+    plt.show()

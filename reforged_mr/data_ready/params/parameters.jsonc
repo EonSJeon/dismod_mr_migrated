@@ -51,10 +51,10 @@
     },
 
     // Age interval during which p is decreasing
-    "decreasing": {
-      "age_start": 0, // start of decrease
-      "age_end": 0, // end of decrease (none)
-    },
+    // "decreasing": {
+    //   // "age_start": 0, // start of decrease
+    //   // "age_end": 0, // end of decrease (none)
+    // },
 
     // Model effects (empty by default)
     "fixed_effects": {
@@ -96,7 +96,7 @@
     },
 
     // Mesh points used for parameter interpolation
-    "parameter_age_mesh": [0, 30, 40, 50, 60, 70, 80, 90, 100],
+    "knots": [0, 30, 40, 50, 60, 70, 80, 90, 100],
 
     // Degree of heterogeneity in the model
     "heterogeneity": "Very",
@@ -112,5 +112,19 @@
     // "slightly smooth": sigma = 0.05
     // "moderately smooth": sigma = 0.05
     // "very smooth": sigma = 0.005
+    "sum_zero_re": true,
+    "rate_type": "neg_binom",
+    "include_covariates": true,
+    "interpolation_method": "linear",
+    
+    // default values:
+    // "sum_zero_re": true,
+    // rate_type: neg_binom
+    // include_covariates: true
+    // interpolation_method: linear
+    // "smoothness": {
+    //   "amount": "No Prior", 
+    // },
+    
   }
 }
