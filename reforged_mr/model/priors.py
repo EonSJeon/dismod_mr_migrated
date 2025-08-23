@@ -177,7 +177,7 @@ def derivative_constraints(data_type: str, mu_age: at.TensorVariable):
     )
 
 
-def covariate_level_constraints(X_centering, X_scaling, beta, U, alpha, mu_age) -> at.TensorVariable:
+def covariate_level_constraints(data_type, mu_age) -> at.TensorVariable:
     """
     Enforce level‐bounds on the covariate‐adjusted rate curve.
     If bounds['lower'] == 0, we skip the lower‐bound term entirely.
@@ -185,14 +185,23 @@ def covariate_level_constraints(X_centering, X_scaling, beta, U, alpha, mu_age) 
     # --------------------------- 1) Initialize PyMC model ---------------------------   
     pm_model = pm.modelcontext(None)  # reforged_mr/model/priors/covariate_level_constraints()
     sd = pm_model.shared_data
+    params = sd["parameters"]
+    params_dt = params[data_type]
 
     # --------------------------- 2) Extract shared data -----------------------------   
-    data_type       = sd["data_type"]
     region_id_graph = sd["region_id_graph"]
-    params          = sd["params_of_data_type"]
+    global_id = sd["global_id"]
+    max_depth = sd["max_depth"]
+    lvl    = params_dt.get('level_value')
+    bounds = params_dt.get('level_bounds')
 
-    lvl    = params.get('level_value')
-    bounds = params.get('level_bounds')
+    U           = sd[f'U_{data_type}']
+    alpha       = sd[f'alpha_{data_type}']
+
+    X_centering = sd[f'X_centering_{data_type}']
+    X_scaling   = sd[f'X_scaling_{data_type}']
+    beta        = sd[f'beta_{data_type}']
+    
 
     # Exit if no level info
     if not lvl or not bounds:
@@ -205,7 +214,6 @@ def covariate_level_constraints(X_centering, X_scaling, beta, U, alpha, mu_age) 
 
     # --------------------------- 4) Build “layers” of U‐masks -----------------------
     layers: list[np.ndarray] = []
-    global_id = 1  # TODO: make it a parameter later 
 
     nodes = [global_id]
     for _ in range(3):

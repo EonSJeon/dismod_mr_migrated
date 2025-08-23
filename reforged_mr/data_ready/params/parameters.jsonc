@@ -69,9 +69,7 @@
         "sign": "positive"
       },
       "x_sdi": {
-        "dist": "Zero",
-        "sigma": 1.0,
-        "sign": "negative"
+        "dist": "Constant",
       }
     },
 

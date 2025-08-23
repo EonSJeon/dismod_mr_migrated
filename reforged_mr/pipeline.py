@@ -283,7 +283,7 @@ def generate_pymc_objects(
     #    - 이후 우도/공변량 계산은 이 슬라이스를 기준으로 수행
     # ----------------------------------------------------------------------
     input_data = sd['input_data']
-    input_data_of_data_type = input_data[input_data['data_type'] == data_type].copy()
+    input_data_dt = input_data[input_data['data_type'] == data_type].copy()
 
     # ----------------------------------------------------------------------
     # 4) 표준오차(SE)와 유효표본크기(ESS) 보정
@@ -291,18 +291,18 @@ def generate_pymc_objects(
     #    - ESS 결측/음수:   이항근사 p(1-p)/SE^2 로 대체
     #    - 보정치(카운트)를 로그로 알려줌
     # ----------------------------------------------------------------------
-    invalid_se_mask   = (input_data_of_data_type['standard_error'] < 0) | (input_data_of_data_type['standard_error'].isna())
-    se_replacement    = (input_data_of_data_type['upper_ci'] - input_data_of_data_type['lower_ci']) / (2 * 1.96)
-    se                = input_data_of_data_type['standard_error'].mask(invalid_se_mask, se_replacement)
+    invalid_se_mask   = (input_data_dt['standard_error'] < 0) | (input_data_dt['standard_error'].isna())
+    se_replacement    = (input_data_dt['upper_ci'] - input_data_dt['lower_ci']) / (2 * 1.96)
+    se                = input_data_dt['standard_error'].mask(invalid_se_mask, se_replacement)
     num_se_augmented  = int(invalid_se_mask.sum())
 
-    invalid_ess_mask  = (input_data_of_data_type['effective_sample_size'] < 0) | (input_data_of_data_type['effective_sample_size'].isna())
-    ess_replacement   = input_data_of_data_type['value'] * (1 - input_data_of_data_type['value']) / se**2
-    ess               = input_data_of_data_type['effective_sample_size'].mask(invalid_ess_mask, ess_replacement)
+    invalid_ess_mask  = (input_data_dt['effective_sample_size'] < 0) | (input_data_dt['effective_sample_size'].isna())
+    ess_replacement   = input_data_dt['value'] * (1 - input_data_dt['value']) / se**2
+    ess               = input_data_dt['effective_sample_size'].mask(invalid_ess_mask, ess_replacement)
     num_ess_augmented = int(invalid_ess_mask.sum())
 
-    input_data_of_data_type['standard_error']        = se
-    input_data_of_data_type['effective_sample_size'] = ess
+    input_data_dt['standard_error']        = se
+    input_data_dt['effective_sample_size'] = ess
     print(f"Standard errors replaced: {num_se_augmented}")
     print(f"Effective sample sizes filled: {num_ess_augmented}")
 
@@ -310,8 +310,8 @@ def generate_pymc_objects(
     # 5) 공유데이터에 슬라이스 저장 및 데이터 존재 여부 플래그
     #    - 이후 단계(스플라인/공변량/우도)에서 사용
     # ----------------------------------------------------------------------
-    sd[f'input_data_{data_type}'] = input_data_of_data_type
-    has_data = len(input_data_of_data_type) > 0
+    sd[f'input_data_{data_type}'] = input_data_dt
+    has_data = len(input_data_dt) > 0
 
     ############# I. Generate PYMC objects #########################################################
     with pm_model:
@@ -343,15 +343,14 @@ def generate_pymc_objects(
         if has_data:
             mu_interval = age_groups.age_standardize_approx(data_type, mu_age=constrained_mu_age)
 
-            # covariate & pi
             if include_covariates:
-                covariates.mean_covariate_model(data_type, mu_interval)
+                pi = covariates.mean_covariate_model(data_type, mu_interval)
             else:
                 pi = mu_interval
-            return
+
             ############ Likelihood based on rate_type #########################################################
             if rate_type == 'poisson':
-                likelihood.poisson(pi=pi)
+                likelihood.poisson(data_type, input_data_dt, pi)
 
             elif rate_type == 'normal':
                 sigma = pm.Uniform(
@@ -360,7 +359,7 @@ def generate_pymc_objects(
                     upper=1e-1,
                     initval=1e-2
                 )
-                likelihood.normal(pi=pi, sigma=sigma)
+                likelihood.normal(data_type, input_data_dt, pi, sigma)
 
             elif rate_type == 'log_normal':
                 sigma = pm.Uniform(
@@ -369,7 +368,7 @@ def generate_pymc_objects(
                     upper=1.0,
                     initval=1e-2
                 )
-                likelihood.log_normal(pi=pi, sigma=sigma)
+                likelihood.log_normal(data_type, input_data_dt, pi, sigma)
 
             elif rate_type == 'offset_log_normal':
                 sigma= pm.Uniform(
@@ -378,10 +377,10 @@ def generate_pymc_objects(
                     upper=10.0,
                     initval=1e-2
                 )
-                likelihood.offset_log_normal(pi=pi, sigma=sigma)
+                likelihood.offset_log_normal(data_type, input_data_dt, pi, sigma)
 
             elif rate_type == 'binom':
-                likelihood.binom(pi=pi)
+                likelihood.binom(data_type, input_data_dt, pi)
 
             elif rate_type == 'neg_binom':
                 hetero = parameters.get('heterogeneity', None)
@@ -389,7 +388,7 @@ def generate_pymc_objects(
                 if data_type == 'pf':
                     lower = 1e12
                 delta = covariates.dispersion_covariate_model(delta_lb=lower, delta_ub=lower * 9.0)
-                likelihood.neg_binom(pi=pi, delta=delta)     
+                likelihood.neg_binom(data_type, input_data_dt, pi, delta)     
 
             elif rate_type == 'beta_binom':
                 hetero = parameters.get('heterogeneity', None)
@@ -397,14 +396,14 @@ def generate_pymc_objects(
                 if data_type == 'pf':
                     lower = 1e12
                 delta = covariates.dispersion_covariate_model(delta_lb=lower, delta_ub=lower * 9.0)
-                likelihood.beta_binom(pi=pi, delta=delta)
+                likelihood.beta_binom(data_type, input_data_dt, pi, delta)
 
             else:
                 raise ValueError(f'Unsupported rate_type "{rate_type}"')
 
         else:
             if include_covariates:
-                covariates.mean_covariate_model(data_type, mu=None)
+                pi = covariates.mean_covariate_model(data_type, mu=None)
             else:
                 assert False, "shouldn't be here"
 
