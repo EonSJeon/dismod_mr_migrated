@@ -7,7 +7,7 @@ from typing import Dict, List, Tuple, Any
 import pytensor.tensor as at   # ← import cumsum, etc.
 
 
-def age_standardize_approx(data_type: str, mu_age: at.TensorVariable, use_lb_data: bool = False) -> at.TensorVariable:
+def age_standardize_approx(data_type: str, mu_age: at.TensorVariable) -> at.TensorVariable:
     """
     Approximate the interval average of mu_age over [age_start, age_end] using precomputed age_weights.
     """
@@ -21,7 +21,10 @@ def age_standardize_approx(data_type: str, mu_age: at.TensorVariable, use_lb_dat
 
     # align weight vector to the age grid
     if w.size != ages.size:
-        w = w[:ages.size] if w.size > ages.size else np.pad(w, (0, ages.size - w.size), constant_values=0)
+        raise ValueError(
+            f"`age_weights` length ({w.size}) must equal `ages` length ({ages.size}). "
+            "No padding/truncation is performed."
+        )
 
     # compute integer indices into the age grid
     start_idx_np = (df["age_start"].clip(ages[0], ages[-1]) - ages[0]).astype(int)

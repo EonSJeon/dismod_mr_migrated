@@ -6,8 +6,9 @@ from typing import Dict, List, Tuple, Any
 import pytensor.tensor as at
 import warnings
 
-SEX_VALUE = {1: .5, 3: 0., 2: -.5}
-
+SEX_NAME2ID = {'Male': 1, 'Female': 2, 'Both': 3}
+SEX_ID2NAME = {v: k for k, v in SEX_NAME2ID.items()}
+SEX_NAME2VAL = {'Male': 0.5, 'Female': -0.5, 'Both': 0.0}
 
 def MyTruncatedNormal(name, mu, sigma, lower, upper):
     # 1) latent unconstrained
@@ -31,28 +32,34 @@ def MyTruncatedNormal(name, mu, sigma, lower, upper):
     pm.Potential(f"{name}_trunc", logp)
     return sigma
 
+
 def build_random_effects_matrix(
     data_type: str,
 ) -> tuple[pd.DataFrame, pd.Series]:
+    # NOTE: Omitting the reference area from the matrix is intentional.
+    #       The effect at the reference area itself is for h(a).
+    #       Should not be dealt twice.
+
     pm_model = pm.modelcontext(None)
     sd = pm_model.shared_data
 
     input_data_dt = sd.get(f'input_data_{data_type}')
     if input_data_dt is None:
         raise KeyError(f"shared_data['input_data_{data_type}'] not set.")
+
     G: nx.DiGraph = sd['region_id_graph']
-    root_id = sd['global_id']
+    global_id = sd['global_id']
     reference_area_id = sd['reference_area_id']
 
     n = len(input_data_dt)
     nodes = list(G.nodes)
 
     # --- 1) Build U (cache shortest paths per unique location) ---
-    U = pd.DataFrame(0.0, index=input_data_dt.index, columns=nodes)
+    U = pd.DataFrame(0.0, index=input_data_dt.index, columns=nodes, dtype=float)
     loc_series = input_data_dt['location_id'].astype(int)
     unique_locs = loc_series.unique()
     path_cache: dict[int, list[int]] = {
-        loc: nx.shortest_path(G, root_id, loc) if loc in G else None
+        loc: nx.shortest_path(G, global_id, loc) if loc in G else None
         for loc in unique_locs
     }
 
@@ -60,7 +67,6 @@ def build_random_effects_matrix(
         path = path_cache.get(loc)
         if not path:
             continue
-        # 벡터화 할당
         U.loc[idx, path] = 1.0
 
     # 빈 경우에도 저장 후 반환
@@ -68,10 +74,11 @@ def build_random_effects_matrix(
         U_ref = pd.Series(dtype=float)
         sd[f'U_{data_type}'] = U
         sd[f'U_ref_{data_type}'] = U_ref
+        # coord는 생성하지 않음(빈 축 등록은 피함)
         return U, U_ref
 
     # --- 2) keep only nodes below reference level & with variation (or Constant RE) ---
-    base_level = G.nodes[reference_area_id]['level']
+    ref_level = G.nodes[reference_area_id]['level']
 
     keep_consts: set[int] = set()
     for k, spec in (sd['parameters'][data_type].get('random_effects', {}) or {}).items():
@@ -79,98 +86,97 @@ def build_random_effects_matrix(
             try:
                 keep_consts.add(int(k))
             except Exception:
-                # 키가 숫자 id가 아니면 매칭 불가 → 무시
-                pass
+                pass  # 키가 숫자 id가 아니면 무시
 
     cols = [
         c for c in nodes
         if (c in U.columns)
         and (U[c].sum() > 0)
-        and (G.nodes[c]['level'] > base_level)
+        and (G.nodes[c]['level'] > ref_level)
         and (1 <= U[c].sum() < n or c in keep_consts)
     ]
     U = U[cols].copy()
 
     # --- 3) Centering vector: subtract reference path so ref has net zero effect ---
-    path_to_ref = set(nx.shortest_path(G, root_id, reference_area_id))
+    path_to_ref = set(nx.shortest_path(G, global_id, reference_area_id))
     shifts = {c: 1.0 if c in path_to_ref else 0.0 for c in U.columns}
     U_ref = pd.Series(shifts, index=U.columns)
 
     U = U.sub(U_ref, axis=1)
 
-    # --- 4) save & return ---
+    # --- 4) RE 노드 coord 등록 (U.columns 순서가 alpha 벡터 축이 됨) ---
+    if U.shape[1] > 0:
+        id_dim = f"re_loc_id_{data_type}"
+        if id_dim not in pm_model.coords:
+            pm_model.add_coord(id_dim, list(U.columns), mutable=False)
+
+    # --- 5) save & return ---
     sd[f'U_{data_type}'] = U
     sd[f'U_ref_{data_type}'] = U_ref
+
     return U, U_ref
 
-def build_sigma_alpha(
-    data_type: str,
-) -> List[Any]:
+def build_sigma_alpha(data_type: str) -> List[Any]:
     pm_model = pm.modelcontext(None)
     sd = pm_model.shared_data
-    parameters = sd['parameters']
-    params_dt = parameters[data_type]
-    re_specs = params_dt.get('random_effects', {})
 
-    sigma_alpha: List[Any] = []
-    max_depth = sd['max_depth']
+    G: nx.DiGraph = sd['region_id_graph']
+    params_dt     = sd['parameters'][data_type]
+    re_specs      = params_dt.get('random_effects', {}) or {}
 
-    for i in range(max_depth):
-        name = f'sigma_alpha_{data_type}_{i}'
-        spec = re_specs.get(name)
+    ref_level = int(G.nodes[sd['reference_area_id']]['level'])
+    max_level  = int(sd['max_depth']) - 1
+
+    sigma_alpha: dict[int, Any] = {}
+    for lvl in range(ref_level, max_level + 1):
+        name    = f'sigma_alpha_{data_type}_{lvl}'
+        spec    = re_specs.get(name)
 
         if spec:
             mu = float(spec['mu'])
             s0 = max(float(spec['sigma']), 1e-3)
-            lb = min(mu, spec['lower'])
-            ub = max(mu, spec['upper'])
+            lb = min(mu, float(spec['lower']))
+            ub = max(mu, float(spec['upper']))
         else:
-            mu = 0.05
-            s0 = 0.03
-            lb = 0.05
-            ub = 0.5
+            mu, s0, lb, ub = 0.05, 0.03, 0.05, 0.5
 
-        sigma_alpha.append(
-            MyTruncatedNormal(
-                name=name,
-                mu=mu,
-                sigma=s0,
-                lower=lb,
-                upper=ub
-            )
-        )
+        sigma_alpha[lvl] = MyTruncatedNormal(name=name, mu=mu, sigma=s0, lower=lb, upper=ub)
 
     sd[f'sigma_alpha_{data_type}'] = sigma_alpha
     return sigma_alpha
 
-def build_alpha(data_type: str) -> list[Any]:
-    """
-    Create per-node random effects alpha for U_{data_type}, enforcing sibling
-    sum-to-zero without re-registering variables. Returns alpha_list aligned to U.columns.
-    """
+def build_alpha(data_type: str):
     pm_model = pm.modelcontext(None)
     sd = pm_model.shared_data
 
     G: nx.DiGraph   = sd['region_id_graph']
     U: pd.DataFrame = sd[f'U_{data_type}']
-    sigma_alpha     = sd[f'sigma_alpha_{data_type}']
+    sigma_alpha     = sd[f'sigma_alpha_{data_type}']  # dict[level] -> RV
     params_dt       = sd['parameters'][data_type]
     specs           = params_dt.get('random_effects', {}) or {}
     sum_zero_re     = bool(params_dt.get('sum_zero_re', params_dt.get('zero_re', True)))
 
-    if U.shape[1] == 0:
-        sd[f'alpha_{data_type}'] = []
-        return []
+    has_U = U.shape[1] > 0
+    if not has_U:
+        sd[f'alpha_{data_type}'] = None
+        return None
 
-    cols = list(U.columns)
+    # --- coord 읽기/등록 (U.columns 순서로 초기화하되, 이미 있으면 그 순서를 사용) ---
+    id_dim  = f"re_loc_id_{data_type}"
+    loc_ids = list(map(int, pm_model.coords[id_dim]))
 
     def _get_spec(c):
         return specs.get(c, specs.get(str(c), specs.get(int(c), None)))
 
     def _sigma_for(c):
-        return sigma_alpha[G.nodes[c]['level']]
+        lvl = G.nodes[int(c)]['level']
+        try:
+            return sigma_alpha[lvl]
+        except KeyError:
+            raise KeyError(f"sigma_alpha for absolute level {lvl} not found.")
 
     def _make_alpha(c):
+        c = int(c)
         sp   = _get_spec(c)
         name = f'alpha_{data_type}_{c}'
         if sp:
@@ -192,11 +198,12 @@ def build_alpha(data_type: str) -> list[Any]:
                 raise ValueError(f"Unknown dist {dist!r} for {name}")
         return pm.Normal(name, mu=0.0, sigma=_sigma_for(c), initval=0.0)
 
-    # 1) pivot plan
+    # 1) pivot plan (형제 sum-to-zero)
     pivot_plan: dict[int, tuple[list[int], float]] = {}
     if sum_zero_re:
+        loc_set = set(loc_ids)
         for p in G.nodes:
-            sibs = [c for c in G.successors(p) if c in cols]
+            sibs = [int(c) for c in G.successors(p) if int(c) in loc_set]
             if len(sibs) < 2:
                 continue
             const_sum = 0.0
@@ -213,9 +220,9 @@ def build_alpha(data_type: str) -> list[Any]:
 
     pivot_nodes = set(pivot_plan.keys())
 
-    # 2) non-pivot 생성
+    # 2) non-pivot 생성 (coord 순서대로)
     alpha_map: dict[int, Any] = {}
-    for c in cols:
+    for c in loc_ids:
         if c in pivot_nodes:
             continue
         alpha_map[c] = _make_alpha(c)
@@ -231,11 +238,15 @@ def build_alpha(data_type: str) -> list[Any]:
             -(sum_rest + const_sum)
         )
 
-    alpha_list = [alpha_map[c] for c in cols]
-    sd[f'alpha_{data_type}'] = alpha_list
-    return alpha_list
+    # 4) list → vector 등록 (dims=coord)
+    alpha_list = [alpha_map[int(c)] for c in loc_ids]
+    alpha_vec  = at.stack([at.as_tensor_variable(a) for a in alpha_list])
+    pm.Deterministic(f"alpha_{data_type}", alpha_vec, dims=(id_dim,))
 
-def build_fixed_effects_design(data_type: str) -> tuple[pd.DataFrame, pd.Series, pd.Series]:
+    sd[f'alpha_{data_type}'] = alpha_vec
+    return alpha_vec
+
+def build_fixed_effects_matrix(data_type: str) -> tuple[pd.DataFrame, pd.Series, pd.Series]:
     pm_model = pm.modelcontext(None)
     sd = pm_model.shared_data
 
@@ -244,10 +255,12 @@ def build_fixed_effects_design(data_type: str) -> tuple[pd.DataFrame, pd.Series,
     # 1) X 구성
     keep = [c for c in input_data_dt.columns if c.startswith('x_')]
     X = input_data_dt[keep].copy()
-    # x_sex 추가
+
+    # x_sex 추가 (SEX_ID2NAME/SEX_NAME2VAL이 이미 정의돼 있다고 가정)
+    SEX_ID2VAL = {id_: SEX_NAME2VAL[name] for id_, name in SEX_ID2NAME.items()}
     if 'sex_id' not in input_data_dt.columns:
         raise ValueError("input_data must contain 'sex_id' to build x_sex.")
-    X['x_sex'] = [SEX_VALUE[int(row['sex_id'])] for _, row in input_data_dt.iterrows()]
+    X['x_sex'] = [SEX_ID2VAL[int(row['sex_id'])] for _, row in input_data_dt.iterrows()]
     X = X.astype(float)
 
     # 2) ESS 가중치 확인
@@ -255,7 +268,7 @@ def build_fixed_effects_design(data_type: str) -> tuple[pd.DataFrame, pd.Series,
         raise ValueError("'effective_sample_size' 컬럼이 필요합니다.")
     w = input_data_dt['effective_sample_size'].astype(float)
     if w.isna().any():
-        raise ValueError("'effective_sample_size'에 NA 값이 있습니다. 모든 값이 유효해야 합니다.")
+        raise ValueError("'effective_sample_size'에 NA 값이 있습니다.")
     w_sum = float(w.sum())
     if not np.isfinite(w_sum) or w_sum <= 0:
         raise ValueError("Sum of effective_sample_size must be positive and finite.")
@@ -274,31 +287,34 @@ def build_fixed_effects_design(data_type: str) -> tuple[pd.DataFrame, pd.Series,
     # 5) 표준화
     X_std = (X - X_centering) / X_scaling
 
+    # 6) covariate coord 등록
+    cov_dim = f"fe_eff_name_{data_type}"
+    cols = X_std.columns.tolist()
+    pm_model.add_coord(cov_dim, cols, mutable=False)
+
     # 공유 저장
     sd[f'X_{data_type}']           = X_std
     sd[f'X_centering_{data_type}'] = X_centering
     sd[f'X_scaling_{data_type}']   = X_scaling
     return X_std, X_centering, X_scaling
 
-def build_beta(data_type: str, X: pd.DataFrame) -> List[Any]:
-    """
-    X.columns 순서에 맞춰 고정효과 계수 목록(beta)을 생성한다.
-    반환: beta(list) — PyMC RV 또는 Deterministic 또는 float(상수)
-    부수효과: pm_model.shared_data['beta'] 저장.
-    """
+def build_beta(data_type: str, X: pd.DataFrame):
     pm_model = pm.modelcontext(None)
     sd = pm_model.shared_data
     params_dt = sd['parameters'][data_type]
     fe_specs  = (params_dt.get('fixed_effects') or {})
 
-    beta: List[Any] = []
+    cov_dim = f"fe_eff_name_{data_type}"
+    pm_model.add_coord(cov_dim, X.columns.tolist(), mutable=False)
+    cols = list(pm_model.coords[cov_dim])
+        
+    beta= []
 
-    for effect in X.columns:
+    for effect in cols:
         name = f'beta_{data_type}_{effect}'
         spec = fe_specs.get(effect)
 
         if spec is None:
-            # 기본 Normal(0,1)
             beta.append(pm.Normal(name, mu=0.0, sigma=1.0))
             continue
 
@@ -326,10 +342,7 @@ def build_beta(data_type: str, X: pd.DataFrame) -> List[Any]:
                 sigma=max(float(spec.get('sigma', 1.0)), 1e-3),
                 initval=abs(spec.get('initval', 0.1)),
             )
-            if sign == 'negative':
-                beta.append(pm.Deterministic(name, -half))
-            else:
-                beta.append(half)
+            beta.append(pm.Deterministic(name, -half) if sign == 'negative' else half)
 
         elif dist == 'Normal':
             beta.append(
@@ -342,40 +355,40 @@ def build_beta(data_type: str, X: pd.DataFrame) -> List[Any]:
         else:
             raise ValueError(f"Unknown fixed_effects dist '{dist}' for effect '{effect}'.")
 
-    # 공유 저장
-    sd[f'beta_{data_type}'] = beta
-    return beta
+    # 벡터화 + coord 연결
+    beta_vec = at.stack([at.as_tensor_variable(b) for b in beta])
+    pm.Deterministic(f"beta_{data_type}", beta_vec, dims=(cov_dim,))
+
+    sd[f'beta_{data_type}']  = beta_vec
+    return beta_vec
 
 def mean_covariate_model(data_type: str, mu: at.TensorVariable):
-
     # -------- Random effects --------
-    U, _ = build_random_effects_matrix(data_type)  # sd[f"U_{data_type}"]도 내부에서 저장된다고 가정
-    build_sigma_alpha(data_type)                   # sd[f"sigma_alpha_{data_type}"] 세팅
-    alpha = build_alpha(data_type)                 # sd[f"alpha_{data_type}"] 세팅
+    U, _ = build_random_effects_matrix(data_type)   # sd[f"U_{dt}"] 저장
+    build_sigma_alpha(data_type)                    # sd[f"sigma_alpha_{dt}"] 저장
+    alpha = build_alpha(data_type)              # Deterministic f"alpha_{dt}" (vector) 반환
 
-    # -------- Fixed effects design --------
-    X, _, _ = build_fixed_effects_design(data_type)
-    beta = build_beta(data_type, X)
+    # -------- Fixed effects --------
+    X, _, _ = build_fixed_effects_matrix(data_type) # sd[f"X_{dt}"] 저장
+    beta = build_beta(data_type, X)             # Deterministic f"beta_{dt}" (vector) 반환
 
-    # -------- Linear predictor --------
-    n_obs = U.shape[0]  # U는 관측 수 x 노드 수. 노드가 0개여도 행 수는 관측 수로 유지됨.
+    n_obs = U.shape[0]
 
-    if alpha:
-        alpha_stack = pm.math.stack(alpha)
-        rand_term   = pm.math.dot(U.values, alpha_stack)
+    # RE term
+    if alpha is None or U.shape[1] == 0:
+        rand_term = at.zeros((n_obs,))
     else:
-        rand_term   = at.zeros((n_obs,))
+        rand_term = at.dot(U.values, alpha)
 
-    if beta:
-        beta_stack  = pm.math.stack(beta)
-        fix_term    = pm.math.dot(X.values, beta_stack)
+    # FE term
+    if beta is None or X.shape[1] == 0:
+        fix_term = at.zeros((n_obs,))
     else:
-        fix_term    = at.zeros((n_obs,))
+        fix_term = at.dot(X.values, beta)
 
     # -------- pi --------
     pi = mu * pm.math.exp(rand_term + fix_term)
     pm.Deterministic(f"pi_{data_type}", pi)
-
     return pi
 
 

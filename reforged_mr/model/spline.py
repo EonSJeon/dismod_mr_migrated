@@ -39,6 +39,7 @@ def spline(data_type: str) -> at.TensorVariable:
     if "age" not in pm_model.coords:
         raise ValueError("coords['age'] is missing. Register it upstream via pm_model.add_coord('age', ages, mutable=False).")
     ages      = np.asarray(pm_model.coords["age"], dtype=float)
+    print(f"ages: {ages}")
     first_age = float(ages[0])
     last_age  = float(ages[-1])
 
@@ -70,7 +71,8 @@ def spline(data_type: str) -> at.TensorVariable:
         knots = np.concatenate([knots, [last_age]])
 
     pm_model.add_coord(knot_dim, knots, mutable=False)
-    print(f"knot_{data_type}: {knots}") # DEBUG
+
+    print(f"knots: {knots}")
 
     # --- interpolation method ---
     method = params_dt.get("interpolation_method", "linear")
@@ -100,10 +102,12 @@ def spline(data_type: str) -> at.TensorVariable:
     ### Main ###
     # --- design matrix (constant) ---
     W = at.constant(build_W_linear(knots, ages))
+    print(f"W: {W.shape}")
 
     # --- knot log-values & positive heights ---
     gamma     = pm.Normal(f"gamma_{data_type}", mu=0.0, sigma=10.0, dims=(knot_dim,))
     exp_gamma = at.exp(gamma)
+    print(f"exp_gamma: {exp_gamma.shape}")
 
     # --- assemble mu(age) ---
     mu_age = pm.Deterministic(f"mu_age_{data_type}", at.dot(W, exp_gamma), dims=("age",))
