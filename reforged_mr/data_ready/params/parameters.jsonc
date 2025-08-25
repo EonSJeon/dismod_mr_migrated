@@ -103,7 +103,7 @@
     // Smoothness configuration across ages
     "smoothness": {
       "age_start": 30, // smoothing begins
-      "amount": "No Prior", // smoothing intensity
+      "amount": "Slightly", // smoothing intensity
       "age_end": 100, // smoothing ends
     },
     // pg 40
