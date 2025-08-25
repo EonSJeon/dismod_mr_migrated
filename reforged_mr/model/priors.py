@@ -76,7 +76,7 @@ def level_constraints(data_type: str, unconstrained_mu_age: at.TensorVariable):
         dims=("age",),
     )
 
-    # ---- soft similarity penalty between constrained and unconstrained ----
+    # ---- soft similarity penalty ONLY within [i_start, i_end] ----
     similar(
         child_curve     = constrained,
         parent_curve    = unconstrained_mu_age,
