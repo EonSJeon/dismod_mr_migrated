@@ -50,11 +50,6 @@
       "age_end": 100, // end of increase
     },
 
-    // Age interval during which p is decreasing
-    "decreasing": {
-      "age_start": 0, // start of decrease
-      "age_end": 0, // end of decrease (none)
-    },
 
     // Model effects (empty by default)
     "fixed_effects": {
@@ -69,9 +64,7 @@
         "sign": "positive"
       },
       "x_sdi": {
-        "dist": "Zero",
-        "sigma": 1.0,
-        "sign": "negative"
+        "dist": "Constant",
       }
     },
 
@@ -107,6 +100,11 @@
       "amount": "Very", // smoothing intensity
       "age_end": 100, // smoothing ends
     },
+    "include_covariates": true,
+    "interpolation_method": "linear",
+    "rate_type": "neg_binom",
+    "sum_zero_re": true,
+    
     // pg 40
     // ||h'|| ~ N(0, sigma^2)
     // "slightly smooth": sigma = 0.05

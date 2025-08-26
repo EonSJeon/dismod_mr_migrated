@@ -1,0 +1,199 @@
+import numpy as np
+import pymc as pm
+import pytensor.tensor as at
+
+
+def similar(child_curve, parent_curve, sigma_parent, sigma_diff, eps=1e-9, penalty_name=""):
+    """
+    Softly shrink child_curve toward parent_curve on the log scale.
+    """
+    model      = pm.modelcontext(None) # reforged_mr - similar()
+    label      = model.shared_data["data_type"]
+    # determine precision τ
+    if hasattr(parent_curve, "distribution"):
+        tau = 1/(sigma_parent**2 + sigma_diff**2)
+    else:
+        tau = 1/(((sigma_parent + eps)/(parent_curve + eps))**2 + sigma_diff**2)
+    # log‐values, clipped to avoid log(0)
+    log_child  = at.log(pm.math.clip(child_curve,  eps, np.inf))
+    log_parent = at.log(pm.math.clip(parent_curve, eps, np.inf))
+    # elementwise log-density, then sum into one potential
+    lp = pm.logp(
+        pm.Normal.dist(mu=log_parent, sigma=1/pm.math.sqrt(tau)),
+        log_child
+    )
+    pm.Potential(f"parent_similarity_{label}{penalty_name}", pm.math.sum(lp))
+
+
+def level_constraints(unconstrained_mu_age: at.TensorVariable):
+    """
+    Hard-clip unconstrained_mu_age outside [before, after] to a fixed value,
+    then softly penalize deviation from the original in between.
+    """
+    pm_model      = pm.modelcontext(None) # reforged_mr - level_constraints()
+    label      = pm_model.shared_data["data_type"]
+    ages       = pm_model.shared_data["ages"]
+    params     = pm_model.shared_data["params_of_data_type"]
+    # exit if no level constraints provided
+    if not ("level_value" in params and "level_bounds" in params):
+        return unconstrained_mu_age, unconstrained_mu_age, None
+
+    lv   = params["level_value"]
+    lb   = params["level_bounds"]["lower"]
+    ub   = params["level_bounds"]["upper"]
+    # map ages to indices
+    start = int(np.clip(lv["age_before"] - ages[0], 0, ages.size))
+    end   = int(np.clip(lv["age_after"]  - ages[0], 0, ages.size))
+    idx   = at.arange(ages.size)
+    val   = float(lv["value"])
+
+    # piecewise: val before start, raw in [start,end], val after end
+    clipped = at.switch(idx < start, val,
+                at.switch(idx > end, val, unconstrained_mu_age))
+    
+    pm_model.add_coord("age", ages)
+    constrained_mu_age = pm.Deterministic(name=f"constrained_mu_age_{label}", var=at.clip(clipped, lb, ub), dims=("age",))
+    # add similarity potential back to the raw curve
+    similar(
+        child_curve      = constrained_mu_age,
+        parent_curve     = unconstrained_mu_age,
+        sigma_parent     = 0.0,
+        sigma_diff       = 0.01,
+        eps              = 1e-6,
+        penalty_name     = "_level_constraints"
+    )
+    return constrained_mu_age
+
+
+def derivative_constraints(mu_age: at.TensorVariable):
+    """
+    Enforce monotonicity by heavily penalizing negative (or positive)
+    finite-differences on specified age-ranges.
+    """
+    model      = pm.modelcontext(None) # reforged_mr - derivative_constraints()
+    ages       = model.shared_data["ages"]
+    params     = model.shared_data["params_of_data_type"]
+    inc, dec   = params.get("increasing"), params.get("decreasing")
+    if not (inc and dec):
+        return {}
+
+    # helper to turn an age into a safe diff-index
+    def to_idx(age_val):
+        idx = age_val - ages[0]
+        return int(np.clip(idx, 0, len(ages) - 1))
+
+    i0, i1 = to_idx(inc["age_start"]), to_idx(inc["age_end"])
+    d0, d1 = to_idx(dec["age_start"]), to_idx(dec["age_end"])
+
+    assert i1 <= d0 or d1 <= i0, (
+        f"Increasing range [{inc['age_start']}, {inc['age_end']}] overlaps "
+        f"with decreasing range [{dec['age_start']}, {dec['age_end']}]."
+    )
+
+    diff = at.diff(mu_age)
+    inc_viol = at.sum(at.clip(diff[i0:i1], -np.inf,   0.0))
+    dec_viol = at.sum(at.clip(diff[d0:d1],   0.0, np.inf))
+
+    penalty = inc_viol**2 + dec_viol**2
+    logp    = -1e12 * penalty
+
+    pm.Potential(
+        name=f"mu_age_derivative_potential_{model.shared_data['data_type']}",
+        var=logp
+    )
+
+
+def covariate_level_constraints(X_centering, X_scaling, beta, U, alpha, mu_age) -> at.TensorVariable:
+    """
+    Enforce level‐bounds on the covariate‐adjusted rate curve.
+    If bounds['lower'] == 0, we skip the lower‐bound term entirely.
+    """
+    # --------------------------- 1) Initialize PyMC model ---------------------------   
+    pm_model = pm.modelcontext(None)  # reforged_mr/model/priors/covariate_level_constraints()
+
+    # --------------------------- 2) Extract shared data -----------------------------   
+    data_type       = pm_model.shared_data["data_type"]
+    region_id_graph = pm_model.shared_data["region_id_graph"]
+    params          = pm_model.shared_data["params_of_data_type"]
+
+    lvl    = params.get('level_value')
+    bounds = params.get('level_bounds')
+
+    # Exit if no level info
+    if not lvl or not bounds:
+        return {}
+
+    # --------------------------- 3) Compute sex covariate range (after centering) --- 
+    sex_idx    = list(X_centering.index).index('x_sex')
+    X_sex_max  =  0.5 - X_centering['x_sex'] / X_scaling['x_sex']
+    X_sex_min  = -0.5 - X_centering['x_sex'] / X_scaling['x_sex']
+
+    # --------------------------- 4) Build “layers” of U‐masks -----------------------
+    layers: list[np.ndarray] = []
+    global_id = 1  # TODO: make it a parameter later 
+
+    nodes = [global_id]
+    for _ in range(3):
+        nodes = [c for n in nodes for c in region_id_graph.successors(n)]
+        mask  = np.array([col in nodes for col in U.columns], dtype=bool)
+        if mask.any():
+            layers.append(mask)
+
+    # --------------------------- 5) Prepare log‐bounds ------------------------------
+    lower_val = bounds['lower']
+    if lower_val <= 0:
+        low = None 
+    else:
+        low = np.log(lower_val)
+
+    high = np.log(bounds['upper'])  # high bound always exists
+
+    # --------------------------- 6) Build potential inside PyMC ---------------------
+    mu        = mu_age
+    log_vals  = at.log(mu)           # log(mu) at each age
+    log_max   = at.max(log_vals)     # base‐curve extrema
+    log_min   = at.min(log_vals)
+
+    # (a) Add random‐effect contributions
+    alpha_list = [] if alpha is None else alpha
+    if len(alpha_list) > 0:
+        alphas = at.stack(alpha_list)  # shape=(n_re,)
+        for m in layers:
+            m_idx = np.where(m)[0]
+            if m_idx.size > 0:
+                sub_alphas = alphas[m_idx]
+                log_max += at.max(sub_alphas)
+                log_min += at.min(sub_alphas)
+
+    # (b) Add sex fixed‐effect
+    b_sex = beta[sex_idx]
+    try:
+        log_max += X_sex_max * b_sex
+        log_min += X_sex_min * b_sex
+    except (TypeError, AttributeError):  # numeric case
+        log_max += X_sex_max * float(b_sex)
+        log_min += X_sex_min * float(b_sex)
+
+    # (c) Compute “below‐lower” violation (if applicable)
+    if low is None:
+        v_low = at.constant(0.0)
+    else:
+        v_low = at.minimum(0, log_min - low)  # negative if below bound
+
+    # (d) Compute “above‐upper” violation
+    v_high = at.maximum(0, log_max - high)    # positive if above bound
+
+    # --------------------------- 7) Apply tight Normal(0, 1e-6) penalty --------------
+    sigma       = 1e-6
+    stacked_v   = at.stack([v_low, v_high])
+    norm_dist   = pm.Normal.dist(mu=0.0, sigma=sigma)
+    logp_vals   = pm.logp(norm_dist, stacked_v)
+    logp_sum    = at.sum(logp_vals)
+
+    # --------------------------- 8) Register as Potential ---------------------------
+    covariate_constraint = pm.Potential(
+        f"covariate_constraint_{data_type}",
+        var=logp_sum
+    )
+
+    return covariate_constraint

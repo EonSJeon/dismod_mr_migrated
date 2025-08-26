@@ -7,26 +7,19 @@ from typing import Dict, List, Tuple, Any
 import pytensor.tensor as at   # ← import cumsum, etc.
 
 
-def age_standardize_approx(data_type: str, mu_age: at.TensorVariable) -> at.TensorVariable:
+def age_standardize_approx(mu_age: at.TensorVariable, use_lb_data: bool = False) -> at.TensorVariable:
     """
     Approximate the interval average of mu_age over [age_start, age_end] using precomputed age_weights.
     """
-    pm_model = pm.modelcontext(None)
-    sd = pm_model.shared_data
-    parameters = sd["parameters"]
-
-    if "age" not in pm_model.coords:
-        raise ValueError("coords['age'] is missing. Register it upstream via pm_model.add_coord('age', ages, mutable=False).")
-    ages = np.asarray(pm_model.coords["age"], dtype=float)
-    w     = np.array(parameters['age_weights'], dtype=np.float64)
-    df    = sd[f"input_data_{data_type}"]
+    model = pm.modelcontext(None)
+    dt    = model.shared_data["data_type"]
+    ages  = model.shared_data["ages"]
+    w     = model.shared_data["age_weights"]
+    df    = model.shared_data["lb_data"] if use_lb_data else model.shared_data["data"]
 
     # align weight vector to the age grid
     if w.size != ages.size:
-        raise ValueError(
-            f"`age_weights` length ({w.size}) must equal `ages` length ({ages.size}). "
-            "No padding/truncation is performed."
-        )
+        w = w[:ages.size] if w.size > ages.size else np.pad(w, (0, ages.size - w.size), constant_values=0)
 
     # compute integer indices into the age grid
     start_idx_np = (df["age_start"].clip(ages[0], ages[-1]) - ages[0]).astype(int)
@@ -36,7 +29,7 @@ def age_standardize_approx(data_type: str, mu_age: at.TensorVariable) -> at.Tens
 
     # cumulative sums for numerator and denominator
     cum_w  = at.constant(np.cumsum(w))
-    cum_mu = pm.Deterministic(f"cum_sum_mu_{data_type}", at.cumsum(mu_age * w))
+    cum_mu = pm.Deterministic(f"cum_sum_mu_{dt}", at.cumsum(mu_age * w))
 
     # extract interval sums and weights
     interval_sum = at.take(cum_mu, end_idx) - at.take(cum_mu, start_idx)
@@ -49,7 +42,7 @@ def age_standardize_approx(data_type: str, mu_age: at.TensorVariable) -> at.Tens
         interval_sum / interval_wt
     )
 
-    mu_interval = pm.Deterministic(name=f"mu_interval_{data_type}", var=avg)
+    mu_interval = pm.Deterministic(name=f"mu_interval_{dt}", var=avg)
     return mu_interval
 
 

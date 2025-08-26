@@ -4,10 +4,11 @@ import pymc as pm
 import networkx as nx
 from typing import Dict, List, Tuple, Any
 import pytensor.tensor as at
+import warnings
 
-
-SEX_VALUE = {1: .5, 3: 0., 2: -.5}
-
+SEX_NAME2ID = {'Male': 1, 'Female': 2, 'Both': 3}
+SEX_ID2NAME = {v: k for k, v in SEX_NAME2ID.items()}
+SEX_NAME2VAL = {'Male': 0.5, 'Female': -0.5, 'Both': 0.0}
 
 def MyTruncatedNormal(name, mu, sigma, lower, upper):
     # 1) latent unconstrained
@@ -33,606 +34,435 @@ def MyTruncatedNormal(name, mu, sigma, lower, upper):
 
 
 def build_random_effects_matrix(
-    input_data: pd.DataFrame,
-    region_id_graph: nx.DiGraph,
-    root_area_id: int,
-    parameters: dict
+    data_type: str,
 ) -> tuple[pd.DataFrame, pd.Series]:
-    """
-    Construct the random‐effects indicator matrix U and its shift vector U_shift.
-    Prints intermediate results to aid understanding.
-    """
-    global_id = 1
-    n = len(input_data)
-    nodes = list(region_id_graph.nodes)
+    # NOTE: Omitting the reference area from the matrix is intentional.
+    #       The effect at the reference area itself is for h(a).
+    #       Should not be dealt twice.
 
-    # 1) Compute and store depth (“level”) of every node    
-    # levels = {}
-    # for node in nodes:
-    #     path = nx.shortest_path(region_graph, global_id, node)
-    #     for lvl, nd in enumerate(path):
-    #         levels[nd] = lvl
-    # nx.set_node_attributes(region_graph, levels, 'level')
-    
-    # No need to compute level, it's already computed in initialize_pipeline()
+    pm_model = pm.modelcontext(None)
+    sd = pm_model.shared_data
 
-    # 2) Build indicator matrix U: row i has 1’s for all ancestors of that obs’s location
-    U = pd.DataFrame(0.0, index=input_data.index, columns=nodes)
-    for idx, loc in input_data['location_id'].items():
-        if loc not in region_id_graph:
-            continue
-        for nd in nx.shortest_path(region_id_graph, global_id, loc):
-            U.at[idx, nd] = 1.0
+    input_data_dt = sd.get(f'input_data_{data_type}')
+    if input_data_dt is None:
+        raise KeyError(f"shared_data['input_data_{data_type}'] not set.")
 
-    if U.empty:
-        print("Empty U → no random effects")
-        return U, pd.Series(dtype=float)
+    G: nx.DiGraph = sd['region_id_graph']
+    global_id = sd['global_id']
+    reference_area_id = sd['reference_area_id']
 
+    n = len(input_data_dt)
+    nodes = list(G.nodes)
 
-    # 3) Keep only nodes below the reference level and with some variation (or constant RE)
-    base_level = region_id_graph.nodes[root_area_id]['level']
-    keep_consts = {
-        name
-        for name, spec in parameters.get('random_effects', {}).items()
-        if spec.get('dist') == 'Constant'
+    # --- 1) Build U (cache shortest paths per unique location) ---
+    U = pd.DataFrame(0.0, index=input_data_dt.index, columns=nodes, dtype=float)
+    loc_series = input_data_dt['location_id'].astype(int)
+    unique_locs = loc_series.unique()
+    path_cache: dict[int, list[int]] = {
+        loc: nx.shortest_path(G, global_id, loc) if loc in G else None
+        for loc in unique_locs
     }
+
+    for idx, loc in loc_series.items():
+        path = path_cache.get(loc)
+        if not path:
+            continue
+        U.loc[idx, path] = 1.0
+
+    # 빈 경우에도 저장 후 반환
+    if U.empty or U.values.sum() == 0:
+        U_ref = pd.Series(dtype=float)
+        sd[f'U_{data_type}'] = U
+        sd[f'U_ref_{data_type}'] = U_ref
+        # coord는 생성하지 않음(빈 축 등록은 피함)
+        return U, U_ref
+
+    # --- 2) keep only nodes below reference level & with variation (or Constant RE) ---
+    ref_level = G.nodes[reference_area_id]['level']
+
+    keep_consts: set[int] = set()
+    for k, spec in (sd['parameters'][data_type].get('random_effects', {}) or {}).items():
+        if isinstance(spec, dict) and spec.get('dist') == 'Constant':
+            try:
+                keep_consts.add(int(k))
+            except Exception:
+                pass  # 키가 숫자 id가 아니면 무시
+
     cols = [
         c for c in nodes
-        if U[c].sum() > 0
-        and region_id_graph.nodes[c]['level'] > base_level
+        if (c in U.columns)
+        and (U[c].sum() > 0)
+        and (G.nodes[c]['level'] > ref_level)
         and (1 <= U[c].sum() < n or c in keep_consts)
     ]
     U = U[cols].copy()
-    
-    # 4) Build and apply centering shift so reference area has net zero effect
-    path_to_ref = set(nx.shortest_path(region_id_graph, global_id, root_area_id))
+
+    # --- 3) Centering vector: subtract reference path so ref has net zero effect ---
+    path_to_ref = set(nx.shortest_path(G, global_id, reference_area_id))
     shifts = {c: 1.0 if c in path_to_ref else 0.0 for c in U.columns}
     U_ref = pd.Series(shifts, index=U.columns)
-    U = U.sub(U_ref, axis=1) # subtract U_shift from each row of U
+
+    U = U.sub(U_ref, axis=1)
+
+    # --- 4) RE 노드 coord 등록 (U.columns 순서가 alpha 벡터 축이 됨) ---
+    if U.shape[1] > 0:
+        id_dim = f"re_loc_id_{data_type}"
+        if id_dim not in pm_model.coords:
+            pm_model.add_coord(id_dim, list(U.columns), mutable=False)
+
+    # --- 5) save & return ---
+    sd[f'U_{data_type}'] = U
+    sd[f'U_ref_{data_type}'] = U_ref
+
     return U, U_ref
 
+def build_sigma_alpha(data_type: str) -> List[Any]:
+    pm_model = pm.modelcontext(None)
+    sd = pm_model.shared_data
 
-def build_sigma_alpha(
-    data_type: str,
-    parameters: Dict[str, Any],
-    max_depth: int = 4
-) -> List[Any]:
-    """
-    Generate hierarchical sigma_alpha priors via MyTruncatedNormal,
-    preserving the original defaults from x_build_sigma_alpha.
-    """
-    sigma_alpha: List[Any] = []
-    re_specs = parameters.get('random_effects', {})
+    G: nx.DiGraph = sd['region_id_graph']
+    params_dt     = sd['parameters'][data_type]
+    re_specs      = params_dt.get('random_effects', {}) or {}
 
-    for i in range(max_depth):
-        name = f'sigma_alpha_{data_type}_{i}'
-        spec = re_specs.get(name)
+    ref_level = int(G.nodes[sd['reference_area_id']]['level'])
+    max_level  = int(sd['max_depth']) - 1
+
+    sigma_alpha: dict[int, Any] = {}
+    for lvl in range(ref_level, max_level + 1):
+        name    = f'sigma_alpha_{data_type}_{lvl}'
+        spec    = re_specs.get(name)
 
         if spec:
-            # 사용자 지정 하이퍼 prior
             mu = float(spec['mu'])
             s0 = max(float(spec['sigma']), 1e-3)
-            lb = min(mu, spec['lower'])
-            ub = max(mu, spec['upper'])
+            lb = min(mu, float(spec['lower']))
+            ub = max(mu, float(spec['upper']))
         else:
-            # 원래의 기본값 유지
-            mu = 0.05
-            s0 = 0.03
-            lb = 0.05
-            ub = 0.5
+            mu, s0, lb, ub = 0.05, 0.03, 0.05, 0.5
 
-        sigma_alpha.append(
-            MyTruncatedNormal(
-                name=name,
-                mu=mu,
-                sigma=s0,
-                lower=lb,
-                upper=ub
-            )
-        )
+        sigma_alpha[lvl] = MyTruncatedNormal(name=name, mu=mu, sigma=s0, lower=lb, upper=ub)
 
+    sd[f'sigma_alpha_{data_type}'] = sigma_alpha
     return sigma_alpha
 
+def build_alpha(data_type: str):
+    pm_model = pm.modelcontext(None)
+    sd = pm_model.shared_data
 
-def build_alpha(
-    data_type: str,
-    U: pd.DataFrame,
-    sigma_alpha: List[Any],
-    parameters: Dict[str, Any],
-    region_id_graph: nx.DiGraph,
-    zero_re: bool = True,
-) -> Tuple[List[Any], List[float], List[Any]]:
-    
-    alpha: List[Any] = []
-    const_alpha_sigma: List[float] = []
-    alpha_potentials: List[Any] = []
+    G: nx.DiGraph   = sd['region_id_graph']
+    U: pd.DataFrame = sd[f'U_{data_type}']
+    sigma_alpha     = sd[f'sigma_alpha_{data_type}']  # dict[level] -> RV
+    params_dt       = sd['parameters'][data_type]
+    specs           = params_dt.get('random_effects', {}) or {}
+    sum_zero_re     = bool(params_dt.get('sum_zero_re', params_dt.get('zero_re', True)))
 
-    # U에 컬럼이 없으면 바로 반환
-    if U.shape[1] == 0:
-        return alpha, const_alpha_sigma, alpha_potentials
-    
-    # 1) 각 컬럼(node)에 대응하는 sigma_alpha[level] 값 추출
-    sigma_list = [
-        sigma_alpha[region_id_graph.nodes[c]['level']]
-        for c in U.columns
-    ]
+    has_U = U.shape[1] > 0
+    if not has_U:
+        sd[f'alpha_{data_type}'] = None
+        return None
 
-    # 2) 각 노드마다 alpha RV 정의
-    for col, sigma in zip(U.columns, sigma_list):
-        name = f'alpha_{data_type}_{col}'
-        spec = parameters.get('random_effects', {}).get(col)
+    # --- coord 읽기/등록 (U.columns 순서로 초기화하되, 이미 있으면 그 순서를 사용) ---
+    id_dim  = f"re_loc_id_{data_type}"
+    loc_ids = list(map(int, pm_model.coords[id_dim]))
 
-        if spec:
-            # 사용자 지정 prior이 있으면 그에 맞춰 분포 생성
-            dist = spec['dist']
+    def _get_spec(c):
+        return specs.get(c, specs.get(str(c), specs.get(int(c), None)))
+
+    def _sigma_for(c):
+        lvl = G.nodes[int(c)]['level']
+        try:
+            return sigma_alpha[lvl]
+        except KeyError:
+            raise KeyError(f"sigma_alpha for absolute level {lvl} not found.")
+
+    def _make_alpha(c):
+        c = int(c)
+        sp   = _get_spec(c)
+        name = f'alpha_{data_type}_{c}'
+        if sp:
+            dist = sp.get('dist')
             if dist == 'Normal':
-                mu0, s0 = float(spec['mu']), float(spec['sigma'])
-                rv = pm.Normal(name, mu=mu0, sigma=s0, initval=0.0)
+                return pm.Normal(name, mu=float(sp.get('mu', 0.0)),
+                                 sigma=float(sp.get('sigma', 1.0)), initval=0.0)
             elif dist == 'TruncatedNormal':
-                mu0 = float(spec['mu'])
-                s0  = max(float(spec['sigma']), 1e-3)
-                lb, ub = spec['lower'], spec['upper']
-                rv = MyTruncatedNormal(
+                return MyTruncatedNormal(
                     name=name,
-                    mu=mu0,
-                    sigma=s0,
-                    lower=lb,
-                    upper=ub
+                    mu=float(sp['mu']),
+                    sigma=max(float(sp['sigma']), 1e-3),
+                    lower=float(sp['lower']),
+                    upper=float(sp['upper']),
                 )
             elif dist == 'Constant':
-                # 상수 prior인 경우 float로 처리
-                rv = float(spec['mu'])
+                return float(sp.get('mu', 0.0))
             else:
-                raise ValueError(f"Unknown dist {dist} for {name}")
-        else:
-            # 기본 Normal(0, sigma_alpha[level]) prior
-            rv = pm.Normal(name, mu=0.0, sigma=sigma, initval=0.0)
+                raise ValueError(f"Unknown dist {dist!r} for {name}")
+        return pm.Normal(name, mu=0.0, sigma=_sigma_for(c), initval=0.0)
 
-        alpha.append(rv)
+    # 1) pivot plan (형제 sum-to-zero)
+    pivot_plan: dict[int, tuple[list[int], float]] = {}
+    if sum_zero_re:
+        loc_set = set(loc_ids)
+        for p in G.nodes:
+            sibs = [int(c) for c in G.successors(p) if int(c) in loc_set]
+            if len(sibs) < 2:
+                continue
+            const_sum = 0.0
+            free = []
+            for c in sibs:
+                sp = _get_spec(c)
+                if sp and sp.get('dist') == 'Constant':
+                    const_sum += float(sp.get('mu', 0.0))
+                else:
+                    free.append(c)
+            if len(free) >= 2:
+                pivot, rest = free[0], free[1:]
+                pivot_plan[pivot] = (rest, const_sum)
 
-        # Constant prior인 경우 상수 sigma 기록, 아니면 NaN
-        const_alpha_sigma.append(
-            float(spec.get('sigma', np.nan))
-            if spec and spec.get('dist') == 'Constant'
-            else np.nan
+    pivot_nodes = set(pivot_plan.keys())
+
+    # 2) non-pivot 생성 (coord 순서대로)
+    alpha_map: dict[int, Any] = {}
+    for c in loc_ids:
+        if c in pivot_nodes:
+            continue
+        alpha_map[c] = _make_alpha(c)
+
+    # 3) pivot = -(rest + const_sum)
+    for pivot, (rest, const_sum) in pivot_plan.items():
+        for r in rest:
+            if r not in alpha_map:
+                alpha_map[r] = _make_alpha(r)
+        sum_rest = sum(alpha_map[r] for r in rest) if rest else 0.0
+        alpha_map[pivot] = pm.Deterministic(
+            f'alpha_{data_type}_{pivot}',
+            -(sum_rest + const_sum)
         )
 
-    # 3) sum-to-zero 제약 (zero_re=True) 처리
-    if zero_re:
-        idx_map = {c: i for i, c in enumerate(U.columns)}
-        for parent in region_id_graph.nodes:
-            # 자식 노드 중 U.columns에 있는 것만 필터
-            children = [
-                c for c in region_id_graph.successors(parent)
-                if c in idx_map
-            ]
-            # 형제가 2개 이상일 때만 sum-to-zero 제약 적용
-            if len(children) < 2:
-                continue
+    # 4) list → vector 등록 (dims=coord)
+    alpha_list = [alpha_map[int(c)] for c in loc_ids]
+    alpha_vec  = at.stack([at.as_tensor_variable(a) for a in alpha_list])
+    pm.Deterministic(f"alpha_{data_type}", alpha_vec, dims=(id_dim,))
 
-            # 첫 번째 자식 인덱스
-            i0 = idx_map[children[0]]
-            spec0 = parameters.get('random_effects', {}).get(children[0])
-            # 첫 자식이 Constant prior이면 건너뛰기
-            if spec0 and spec0.get('dist') == 'Constant':
-                continue
+    sd[f'alpha_{data_type}'] = alpha_vec
+    return alpha_vec
 
-            # 나머지 형제들 인덱스
-            sibs = [idx_map[c] for c in children[1:]]
-            # alpha[i0] = - sum(alpha[sibs])
-            det = pm.Deterministic(
-                f'alpha_det_{data_type}_{i0}',
-                -sum(alpha[i] for i in sibs)
-            )
-            old = alpha[i0]
-            alpha[i0] = det
+def build_fixed_effects_matrix(data_type: str) -> tuple[pd.DataFrame, pd.Series, pd.Series]:
+    pm_model = pm.modelcontext(None)
+    sd = pm_model.shared_data
 
-            # 기존 stochastic이면 그 logp를 Potential로 보존
-            if isinstance(old, pm.Distribution):
-                alpha_potentials.append(
-                    pm.Potential(
-                        f'alpha_pot_{data_type}_{children[0]}',
-                        old.logp(det)
-                    )
-                )
+    input_data_dt: pd.DataFrame = sd[f"input_data_{data_type}"].copy()
 
-    return alpha, const_alpha_sigma, alpha_potentials
+    # 1) X 구성
+    keep = [c for c in input_data_dt.columns if c.startswith('x_')]
+    X = input_data_dt[keep].copy()
 
-
-def mean_covariate_model(mu: at.TensorVariable): 
-    # NOTE:
-    # U_ref and X_centering have different functions. 
-    # U_ref is 0/1 indicator vector to make U(ref) = 0, 
-    # X_centering is a vector of mean of covariates for the centering literally.
-
-    # --------------------------- 1) initialize pm_model ---------------------------   
-    pm_model = pm.modelcontext(None) # at reforged_mr/model/covariates/mean_covariate_model()
-
-    # --------------------------- 2) extract shared data ---------------------------   
-    data_type = pm_model.shared_data["data_type"]
-    input_data = pm_model.shared_data["data"]
-    parameters = pm_model.shared_data["params_of_data_type"]
-    root_area_id = pm_model.shared_data["reference_area_id"]
-    zero_re = pm_model.shared_data["zero_re"]
-    region_id_graph = pm_model.shared_data["region_id_graph"]
-
-    U, U_ref = build_random_effects_matrix(input_data, region_id_graph, root_area_id, parameters)
-
-    sigma_alpha = build_sigma_alpha(data_type, parameters)
-
-    alpha, const_alpha_sigma, alpha_potentials = build_alpha(
-        data_type=data_type,
-        U=U,
-        sigma_alpha=sigma_alpha,
-        parameters=parameters,
-        zero_re=zero_re,
-        region_id_graph=region_id_graph
-    )
-
-    keep = [c for c in input_data.columns if c.startswith('x_')]
-    X = input_data[keep].copy()
-    X['x_sex'] = [SEX_VALUE[row['sex_id']] for _, row in input_data.iterrows()]
+    # x_sex 추가 (SEX_ID2NAME/SEX_NAME2VAL이 이미 정의돼 있다고 가정)
+    SEX_ID2VAL = {id_: SEX_NAME2VAL[name] for id_, name in SEX_ID2NAME.items()}
+    if 'sex_id' not in input_data_dt.columns:
+        raise ValueError("input_data must contain 'sex_id' to build x_sex.")
+    X['x_sex'] = [SEX_ID2VAL[int(row['sex_id'])] for _, row in input_data_dt.iterrows()]
     X = X.astype(float)
 
-    # --- 2) 분석 가중치: effective_sample_size 필수
-    if 'effective_sample_size' not in input_data.columns:
+    # 2) ESS 가중치 확인
+    if 'effective_sample_size' not in input_data_dt.columns:
         raise ValueError("'effective_sample_size' 컬럼이 필요합니다.")
-    
-    w = input_data['effective_sample_size'].astype(float)
-    
+    w = input_data_dt['effective_sample_size'].astype(float)
     if w.isna().any():
-        raise ValueError("'effective_sample_size'에 NA 값이 있습니다. 모든 값이 유효해야 합니다.")
-
+        raise ValueError("'effective_sample_size'에 NA 값이 있습니다.")
     w_sum = float(w.sum())
+    if not np.isfinite(w_sum) or w_sum <= 0:
+        raise ValueError("Sum of effective_sample_size must be positive and finite.")
 
-    # --- 3) 가중 평균(centering, data 기반)
+    # 3) 가중 평균(centering)
     X_centering = X.mul(w, axis=0).sum(axis=0) / w_sum
 
-    # --- 4) 가중 표준편차(분산=1이 되도록), 0 회피 바닥값
+    # 4) 가중 표준편차(바닥값 포함)
     def _wstd(col: pd.Series, w: pd.Series) -> float:
         m = (col * w).sum() / w.sum()
-        var = (w * (col - m)**2).sum() / w.sum()  # population weighted variance
+        var = (w * (col - m) ** 2).sum() / w.sum()
         return float(np.sqrt(var))
 
     X_scaling = X.apply(lambda c: max(_wstd(c, w), 1e-12))
 
-    # --- 5) 표준화: (X - mean) / std
-    X = (X - X_centering) / X_scaling
+    # 5) 표준화
+    X_std = (X - X_centering) / X_scaling
 
-    beta = []
-    const_beta_sigma = []
-    for effect in X.columns:
+    # 6) covariate coord 등록
+    cov_dim = f"fe_eff_name_{data_type}"
+    cols = X_std.columns.tolist()
+    pm_model.add_coord(cov_dim, cols, mutable=False)
+
+    # 공유 저장
+    sd[f'X_{data_type}']           = X_std
+    sd[f'X_centering_{data_type}'] = X_centering
+    sd[f'X_scaling_{data_type}']   = X_scaling
+    return X_std, X_centering, X_scaling
+
+def build_beta(data_type: str, X: pd.DataFrame):
+    pm_model = pm.modelcontext(None)
+    sd = pm_model.shared_data
+    params_dt = sd['parameters'][data_type]
+    fe_specs  = (params_dt.get('fixed_effects') or {})
+
+    cov_dim = f"fe_eff_name_{data_type}"
+    pm_model.add_coord(cov_dim, X.columns.tolist(), mutable=False)
+    cols = list(pm_model.coords[cov_dim])
+        
+    beta= []
+
+    for effect in cols:
         name = f'beta_{data_type}_{effect}'
-        spec = parameters.get('fixed_effects', {}).get(effect)
-        if spec:
-            dist = spec['dist']
-            if dist == 'Zero':
-                beta.append(pm.Deterministic(name, at.as_tensor_variable(0.0)))
-            elif dist == 'TruncatedNormal':
-                beta.append(
-                    MyTruncatedNormal(
-                        name=name,
-                        mu=float(spec['mu']),
-                        sigma=max(float(spec['sigma']), 1e-3),
-                        lower=float(spec['lower']),
-                        upper=float(spec['upper'])
-                    )
-                )
-            elif dist == 'HalfNormal':
-                sign = spec.get('sign', 'positive')  # 기본은 양수
-                if sign == 'negative':
-                    half = pm.HalfNormal(
-                        name + "_half",
-                        sigma=max(float(spec.get('sigma', 1.0)), 1e-3),
-                        initval=abs(spec.get('initval', 0.1))
-                    )
-                    beta.append(pm.Deterministic(name, -half))
-                else:
-                    beta.append(
-                        pm.HalfNormal(
-                            name,
-                            sigma=max(float(spec.get('sigma', 1.0)), 1e-3),
-                            initval=spec.get('initval', 0.1)
-                        )
-                    )
-            else:
-                beta.append(
-                    pm.Normal(
-                        name,
-                        mu=spec.get('mu', 0),
-                        sigma=spec.get('sigma', 1)
-                    )
-                )
+        spec = fe_specs.get(effect)
 
-            const_beta_sigma.append(spec.get('sigma') if dist == 'Constant' else np.nan)
-        else:
+        if spec is None:
             beta.append(pm.Normal(name, mu=0.0, sigma=1.0))
-            const_beta_sigma.append(np.nan)
+            continue
 
+        dist = spec.get('dist', 'Normal')
+
+        if dist == 'Constant':
+            val = float(spec.get('mu', 0.0))
+            beta.append(pm.Deterministic(name, at.as_tensor_variable(val)))
+
+        elif dist == 'TruncatedNormal':
+            beta.append(
+                MyTruncatedNormal(
+                    name=name,
+                    mu=float(spec['mu']),
+                    sigma=max(float(spec['sigma']), 1e-3),
+                    lower=float(spec['lower']),
+                    upper=float(spec['upper']),
+                )
+            )
+
+        elif dist == 'HalfNormal':
+            sign = spec.get('sign', 'positive')
+            half = pm.HalfNormal(
+                name + ("_half" if sign == 'negative' else ""),
+                sigma=max(float(spec.get('sigma', 1.0)), 1e-3),
+                initval=abs(spec.get('initval', 0.1)),
+            )
+            beta.append(pm.Deterministic(name, -half) if sign == 'negative' else half)
+
+        elif dist == 'Normal':
+            beta.append(
+                pm.Normal(
+                    name,
+                    mu=float(spec.get('mu', 0.0)),
+                    sigma=float(spec.get('sigma', 1.0)),
+                )
+            )
+        else:
+            raise ValueError(f"Unknown fixed_effects dist '{dist}' for effect '{effect}'.")
+
+    # 벡터화 + coord 연결
+    beta_vec = at.stack([at.as_tensor_variable(b) for b in beta])
+    pm.Deterministic(f"beta_{data_type}", beta_vec, dims=(cov_dim,))
+
+    sd[f'beta_{data_type}']  = beta_vec
+    return beta_vec
+
+def mean_covariate_model(data_type: str, mu: at.TensorVariable):
+    # -------- Random effects --------
+    U, _ = build_random_effects_matrix(data_type)   # sd[f"U_{dt}"] 저장
+    build_sigma_alpha(data_type)                    # sd[f"sigma_alpha_{dt}"] 저장
+    alpha = build_alpha(data_type)              # Deterministic f"alpha_{dt}" (vector) 반환
+
+    # -------- Fixed effects --------
+    X, _, _ = build_fixed_effects_matrix(data_type) # sd[f"X_{dt}"] 저장
+    beta = build_beta(data_type, X)             # Deterministic f"beta_{dt}" (vector) 반환
 
     n_obs = U.shape[0]
 
-    if alpha:
-        alpha_stack = pm.math.stack(alpha)
-        rand_term   = pm.math.dot(U.values, alpha_stack)
+    # RE term
+    if alpha is None or U.shape[1] == 0:
+        rand_term = at.zeros((n_obs,))
     else:
-        rand_term   = at.zeros((n_obs,))
+        rand_term = at.dot(U.values, alpha)
 
-    if beta:
-        beta_stack = pm.math.stack(beta)
-        fix_term   = pm.math.dot(X.values, beta_stack)
+    # FE term
+    if beta is None or X.shape[1] == 0:
+        fix_term = at.zeros((n_obs,))
     else:
-        fix_term   = at.zeros((n_obs,))
+        fix_term = at.dot(X.values, beta)
 
-    pi = pm.Deterministic(
-        f"pi_{data_type}",
-        mu * pm.math.exp(rand_term + fix_term)
-    )
-
-    return pi, U, U_ref, sigma_alpha, alpha, alpha_potentials, const_alpha_sigma, X, X_centering, X_scaling, beta, const_beta_sigma
+    # -------- pi --------
+    pi = mu * pm.math.exp(rand_term + fix_term)
+    pm.Deterministic(f"pi_{data_type}", pi)
+    return pi
 
 
 def dispersion_covariate_model(
+    data_type: str,
     delta_lb: float,
     delta_ub: float,
-) -> Dict[str, Any]:
-    """
-    Generate dispersion (delta) covariate model in PyMC 5.3 style.
+):
+    pm_model = pm.modelcontext(None)
+    sd = pm_model.shared_data
+    input_data_dt = sd[f"input_data_{data_type}"]
+    n_obs = len(input_data_dt)
 
-    Parameters
-    ----------
-    delta_lb : float
-        delta 하한 (양수)
-    delta_ub : float
-        delta 상한 (양수)
+    if not (np.isfinite(delta_lb) and np.isfinite(delta_ub) and delta_lb > 0 and delta_ub > delta_lb):
+        raise ValueError(f"Invalid delta bounds: lb={delta_lb}, ub={delta_ub} (require 0 < lb < ub)")
 
-    Returns
-    -------
-    Dict[str, Any]
-        - eta   : [Uniform RV on log(delta)]
-        - Z     : DataFrame slice of z_* covariates (원본 DataFrame에서 복사본)
-        - zeta  : [Normal RV vector]  # Z가 있을 때만 반환
-        - delta : [Deterministic]      # exp(eta + Z @ zeta) 또는 exp(eta) * ones
-    """
+    lower = float(np.log(delta_lb))
+    upper = float(np.log(delta_ub))
 
-    # --------------------------- 1) initialize pm_model ---------------------------   
-    pm_model = pm.modelcontext(None) # at reforged_mr/model/covariates/dispersion_covariate_model()
-
-
-    # --------------------------- 2) extract shared data ---------------------------   
-    data_type = pm_model.shared_data["data_type"]
-    input_data = pm_model.shared_data["data"]
-
-    # ─── 1) log(delta)의 하한/상한 계산 ──────────────────────────────────────
-    lower = np.log(delta_lb)
-    upper = np.log(delta_ub)
-
-    # ─── 2) eta ~ Uniform(log(delta_lb), log(delta_ub)) ────────────────────
     eta = pm.Uniform(
-        f"eta_{data_type}",
+        name=f"eta_{data_type}",
         lower=lower,
         upper=upper,
         initval=0.5 * (lower + upper),
-        # dims 지정은 필요 없으므로 생략
     )
 
-    # ─── 3) “z_” 로 시작하고 분산(std) > 0인 컬럼만 골라냄 ─────────────────────
-    keep_cols = [
-        c for c in input_data.columns
-        if c.startswith("z_") and input_data[c].std() > 0
-    ]
-    Z = input_data[keep_cols].copy()
+    keep_cols = [c for c in input_data_dt.columns if c.startswith("z_")]
+    Z = input_data_dt[keep_cols].select_dtypes(include=[np.number]).copy()
+    has_Z = Z.shape[1] > 0
 
-    # ─── 4) Z가 하나라도 있을 때 ───────────────────────────────────────────
-    if len(Z.columns) > 0:
-        # (가) “covariate” 차원(coord) 먼저 등록
-        pm_model.add_coord("covariate", Z.columns.tolist(), mutable=False)
+    dropped = []
+    if has_Z:
+        # fill NaN with 0 (no contribution)
+        Z = Z.fillna(0.0)
+        # drop constant columns (std==0)
+        const_mask = (Z.std(ddof=0) == 0.0)
+        if const_mask.any():
+            dropped = Z.columns[const_mask].tolist()
+            Z = Z.loc[:, ~const_mask]
 
-        # (나) zeta ~ Normal(0, 0.25) 벡터, 길이 = len(Z.columns)
+    cov_dim = f"z_covariate_{data_type}"
+    obs_dim = f"obs_dim_{data_type}"
+
+    pm_model.add_coord(obs_dim, np.arange(n_obs), mutable=False)
+        
+    
+    if has_Z:
+        # register covariate coord (or validate identical)
+        cols = Z.columns.tolist()
+        pm_model.add_coord(cov_dim, cols, mutable=False)
+
+        # prior on coefficients
         zeta = pm.Normal(
-            f"zeta_{data_type}",
+            name=f"zeta_{data_type}",
             mu=0.0,
             sigma=0.25,
-            dims=("covariate",),
-            initval=np.zeros(len(Z.columns)),
+            dims=(cov_dim,),
+            initval=np.zeros(Z.shape[1]),
         )
 
-        # (다) “obs_dim” 차원(coord) 등록 (관측 개수만큼)
-        pm_model.add_coord("obs_dim", np.arange(len(input_data)), mutable=False)
-
-        # (라) delta = exp(eta + Z.values @ zeta) 를 Deterministic으로 등록
+        Z_mat = np.asarray(Z.values, dtype=float)
         delta = pm.Deterministic(
-            f"delta_{data_type}",
-            pm.math.exp(eta + pm.math.dot(Z.values, zeta)),
-            dims=("obs_dim",),
+            name=f"delta_{data_type}",
+            var=pm.math.exp(eta + pm.math.dot(Z_mat, zeta)),
+            dims=(obs_dim,),
         )
-
-        return delta
-
-
-    # ─── 5) Z가 없을 때 ────────────────────────────────────────────────────
     else:
-        # (가) “obs_dim” 차원(coord) 등록
-        pm_model.add_coord("obs_dim", np.arange(len(input_data)), mutable=False)
-
-        # (나) delta = exp(eta) * ones(len(input_data)) 형태로 생성
-        const_delta = pm.Deterministic(
-            f"delta_{data_type}",
-            pm.math.exp(eta) * np.ones(len(input_data)),
-            dims=("obs_dim",),
+        if dropped:
+            warnings.warn(f"[dispersion] dropped constant z_* columns: {dropped}", RuntimeWarning)
+        # no z-covariates → constant delta per obs
+        delta = pm.Deterministic(
+            name=f"delta_{data_type}",
+            var=pm.math.exp(eta) * at.ones(n_obs),
+            dims=(obs_dim,),
         )
 
-        return const_delta
-
-
-# def predict_for(
-#     # model: dismod_mr.data.MRModel,
-#     vars: Dict[str, Any],
-#     lower: float = -np.inf,
-#     upper: float = np.inf
-# ) -> np.ndarray:
-#     """
-#     Simplified posterior-predictive draws using only mu_age.
-#     """
-#     # Ensure that sampling has been run
-#     assert hasattr(model, "idata"), "`model.idata` not found. Run pm.sample() first."
-#     idata = model.idata
-
-#     # Extract mu_age variable
-#     mu_var = vars.get("mu_age")
-#     assert mu_var is not None, "`vars` must contain key 'mu_age'!"
-#     mu_name = mu_var.name
-#     assert mu_name in idata.posterior.data_vars, f"`{mu_name}` not found in idata.posterior"
-
-#     # Pull out and reshape the posterior draws
-#     arr = idata.posterior[mu_name].values  # (chains, draws, ages)
-#     n_chain, n_draw, n_ages = arr.shape
-#     mu_trace = arr.reshape((n_chain * n_draw, n_ages))  # → (samples, ages)
-
-#     # Clip to [lower, upper] and return
-#     return np.clip(mu_trace, lower, upper)
-
-
-# def predict_for(
-#     idata,
-#     constrained_mu_age,
-#     # model: dismod_mr.data.MRModel,
-#     parameters: Dict[str, Any],
-#     root_area: str,
-#     root_sex: str,
-#     root_year: int,
-#     area: str,
-#     sex: str,
-#     year: int,
-#     population_weighted: bool,
-#     vars: Dict[str, Any],
-#     lower: float,
-#     upper: float
-# ) -> np.ndarray:
-#     """
-#     Generate posterior-predictive draws for a specific (area, sex, year).
-
-#     model.idata에 posterior 샘플이 저장되어 있어야 하고,
-#     vars 딕셔너리에 mu_age, alpha, beta, U, X, ... 등이 포함되어 있어야 합니다.
-#     """
-
-#     mu_name = constrained_mu_age.name
-
-#     assert mu_name in idata.posterior, f"`{mu_name}` not found in idata.posterior"
-
-#     arr = idata.posterior[mu_name].values  # shape = (n_chain, n_draw, n_ages)
-#     n_chain, n_draw, n_ages = arr.shape
-#     mu_trace = arr.reshape((n_chain * n_draw, n_ages))  # shape = (n_samples, n_ages)
-#     n_samples = mu_trace.shape[0]
-
-#     # 3) alpha_trace (random effects) 생성
-#     alpha_trace = np.empty((n_samples, 0))
-#     if "alpha" in vars and isinstance(vars["alpha"], list) and vars["alpha"]:
-#         traces = []
-#         for alpha_node, sigma_const in zip(vars["alpha"], vars["const_alpha_sigma"]):
-#             name_alpha = alpha_node.name
-#             if name_alpha in idata.posterior:
-#                 arr_a = idata.posterior[name_alpha].values  # (chains, draws)
-#                 traces.append(arr_a.reshape(n_chain * n_draw))
-#             else:
-#                 sig = max(sigma_const, 1e-9)
-#                 loc = float(alpha_node)
-#                 draws = np.random.normal(loc=loc, scale=1.0 / np.sqrt(sig), size=n_samples)
-#                 traces.append(draws)
-#         alpha_trace = np.column_stack(traces)
-
-#     # 4) beta_trace (fixed effects) 생성
-#     beta_trace = np.empty((n_samples, 0))
-#     if "beta" in vars and isinstance(vars["beta"], list) and vars["beta"]:
-#         traces = []
-#         for beta_node, sigma_const in zip(vars["beta"], vars["const_beta_sigma"]):
-#             name_beta = beta_node.name
-#             if name_beta in idata.posterior:
-#                 arr_b = idata.posterior[name_beta].values  # (chains, draws)
-#                 traces.append(arr_b.reshape(n_chain * n_draw))
-#             else:
-#                 sig = max(sigma_const, 1e-9)
-#                 loc = float(beta_node)
-#                 draws = np.random.normal(loc=loc, scale=1.0 / np.sqrt(sig), size=n_samples)
-#                 traces.append(draws)
-#         beta_trace = np.column_stack(traces)
-
-#     # 5) leaf-nodes 찾기
-#     leaves = [n for n in nx.bfs_tree(model.hierarchy, area) if model.hierarchy.out_degree(n) == 0]
-#     if not leaves:
-#         leaves = [area]
-
-#     # 6) output_template에서 (area, sex, year)에 해당하는 pop, covariates 추출
-#     output_tpl = model.output_template.copy()
-#     grp = (
-#         output_tpl
-#         .groupby(["area", "sex", "year"], as_index=False)
-#         .mean()
-#         .set_index(["area", "sex", "year"])
-#     )
-
-#     # 7) X_df (centered covariates) 준비
-#     if "X" in vars and isinstance(vars["X"], pd.DataFrame) and not vars["X"].empty:
-#         # (1) 원래 vars["X"].columns에 들어있는 이름들로 grp에서 필터
-#         X_df = grp.filter(vars["X"].columns, axis=1).copy()
-
-#         # (2) "x_sex"가 vars["X"].columns에 있으면 강제로 생성
-#         if "x_sex" in vars["X"].columns:
-#             X_df["x_sex"] = SEX_VALUE[sex]
-
-#         # (3) shift(centering) 적용
-#         X_df = X_df - vars["X_shift"]
-
-#     else:
-#         X_df = pd.DataFrame(index=grp.index)
-
-#     # 8) U_row Series 준비 (한 행짜리)
-#     if "U" in vars and isinstance(vars["U"], pd.DataFrame) and not vars["U"].empty:
-#         U_cols = vars["U"].columns
-#         U_row = pd.Series(0.0, index=U_cols)
-#     else:
-#         U_row = pd.Series(dtype=float)
-
-#     # 9) 각 leaf별로 cov_shift 계산
-#     cov_shift = np.zeros(n_samples)
-#     total_weight = 0.0
-
-#     for leaf in leaves:
-#         # (1) U_row 재설정
-#         U_row[:] = 0.0
-#         path = nx.shortest_path(model.hierarchy, root_area, leaf)
-#         for node in path[1:]:
-#             if node in U_row.index:
-#                 U_row[node] = 1.0 - vars["U_shift"].get(node, 0.0)
-
-#         # (2) random-effect 기여: alpha_trace · U_row
-#         if alpha_trace.size > 0:
-#             log_shift = alpha_trace.dot(U_row.values)
-#         else:
-#             log_shift = np.zeros(n_samples)
-
-#         # (3) fixed-effect 기여: beta_trace · X_vals
-#         if beta_trace.size and (leaf, sex, year) in X_df.index:
-#             x_vals = X_df.loc[(leaf, sex, year)].values
-#             log_shift = log_shift + beta_trace.dot(x_vals)
-
-#         # (4) population‐weight or unweighted average
-#         pop = float(grp.at[(leaf, sex, year), "pop"])
-#         if population_weighted:
-#             cov_shift += np.exp(log_shift) * pop
-#             total_weight += pop
-#         else:
-#             cov_shift += log_shift
-#             total_weight += 1.0
-
-#     # (5) 정규화
-#     if population_weighted:
-#         cov_shift = cov_shift / total_weight
-#     else:
-#         cov_shift = np.exp(cov_shift / total_weight)
-
-#     # 10) baseline mu_age와 곱하고 clip
-#     preds = mu_trace * cov_shift[:, None]  # shape = (n_samples, n_ages)
-#     clipped = np.clip(preds, lower, upper)
-
-#     return clipped
+    return delta

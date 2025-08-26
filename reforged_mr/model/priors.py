@@ -3,197 +3,265 @@ import pymc as pm
 import pytensor.tensor as at
 
 
-def similar(child_curve, parent_curve, sigma_parent, sigma_diff, eps=1e-9, penalty_name=""):
-    """
-    Softly shrink child_curve toward parent_curve on the log scale.
-    """
-    model      = pm.modelcontext(None) # reforged_mr - similar()
-    label      = model.shared_data["data_type"]
-    # determine precision τ
-    if hasattr(parent_curve, "distribution"):
-        tau = 1/(sigma_parent**2 + sigma_diff**2)
-    else:
-        tau = 1/(((sigma_parent + eps)/(parent_curve + eps))**2 + sigma_diff**2)
-    # log‐values, clipped to avoid log(0)
-    log_child  = at.log(pm.math.clip(child_curve,  eps, np.inf))
-    log_parent = at.log(pm.math.clip(parent_curve, eps, np.inf))
-    # elementwise log-density, then sum into one potential
-    lp = pm.logp(
-        pm.Normal.dist(mu=log_parent, sigma=1/pm.math.sqrt(tau)),
-        log_child
+def similar(
+    child_curve,
+    parent_curve,
+    sigma_parent,      # 선형 스케일 표준편차(연령별 벡터/스칼라 모두 허용)
+    eps=1e-9,
+    penalty_name="",
+    sigma_diff_log=0.0 # (선택) 구조적 차이 허용, 문헌식과 동일하려면 0으로 두세요
+):
+    pm_model = pm.modelcontext(None)
+    label    = pm_model.shared_data.get("data_type", "")
+
+    ylog = at.log(child_curve  + eps)
+    mlog = at.log(parent_curve + eps)
+
+    sigma_log = (at.as_tensor_variable(sigma_parent) + eps) / (parent_curve + eps)
+    if sigma_diff_log and float(sigma_diff_log) > 0:
+        sigma_log = pm.math.sqrt(sigma_log**2 + float(sigma_diff_log)**2)
+
+    # 안전 바닥(0 분산 방지)
+    sigma_log = pm.math.clip(sigma_log, 1e-12, np.inf)
+
+    lp = pm.logp(pm.Normal.dist(mu=mlog, sigma=sigma_log), ylog)
+    return pm.Potential(f"parent_similarity_{label}{penalty_name}", at.sum(lp))
+
+
+def level_constraints(data_type: str, unconstrained_mu_age: at.TensorVariable):
+    pm_model = pm.modelcontext(None)
+    sd       = pm_model.shared_data
+    params   = sd["parameters"]
+    params_dt   = params[data_type]
+
+    if ("level_value" not in params_dt) or ("level_bounds" not in params_dt):
+        return unconstrained_mu_age
+
+    # ---- guards ----
+    if "age" not in pm_model.coords:
+        raise ValueError("coords['age'] is missing. Register it upstream.")
+    ages = np.asarray(pm_model.coords["age"], dtype=float)
+    if ages.ndim != 1 or ages.size == 0:
+        raise ValueError("coords['age'] must be a 1D non-empty array.")
+
+    # ---- config ----
+    lv = params_dt["level_value"]
+    lb = float(params_dt["level_bounds"]["lower"])
+    ub = float(params_dt["level_bounds"]["upper"])
+    if not (np.isfinite(lb) and np.isfinite(ub) and lb < ub):
+        raise ValueError(f"Invalid level_bounds: lower={lb}, upper={ub}")
+
+    level_value = float(lv["value"])
+    age_before  = float(lv["age_before"])
+    age_after   = float(lv["age_after"])
+
+    if age_after < age_before:
+        raise ValueError(f"'age_after' ({age_after}) must be >= 'age_before' ({age_before}).")
+
+    # ---- map ages → index range using searchsorted (grid spacing may be != 1) ----
+    i_start = int(np.clip(np.searchsorted(ages, age_before, side="left"),  0, ages.size - 1))
+    i_end   = int(np.clip(np.searchsorted(ages, age_after,  side="right") - 1, 0, ages.size - 1))
+
+    idx = at.arange(ages.size)
+    val = at.as_tensor_variable(level_value)
+
+    ### Clipping ###
+    # ---- hard clipping age before and after ----
+    mid   = at.switch((idx >= i_start) & (idx <= i_end), unconstrained_mu_age, val)
+    clipped = at.switch(idx < i_start, val, at.switch(idx > i_end, val, mid))
+
+    constrained = pm.Deterministic(
+        f"constrained_mu_age_{data_type}",
+        at.clip(clipped, lb, ub),
+        dims=("age",),
     )
-    pm.Potential(f"parent_similarity_{label}{penalty_name}", pm.math.sum(lp))
 
 
-def level_constraints(unconstrained_mu_age: at.TensorVariable):
-    """
-    Hard-clip unconstrained_mu_age outside [before, after] to a fixed value,
-    then softly penalize deviation from the original in between.
-    """
-    pm_model      = pm.modelcontext(None) # reforged_mr - level_constraints()
-    label      = pm_model.shared_data["data_type"]
-    ages       = pm_model.shared_data["ages"]
-    params     = pm_model.shared_data["params_of_data_type"]
-    # exit if no level constraints provided
-    if not ("level_value" in params and "level_bounds" in params):
-        return unconstrained_mu_age, unconstrained_mu_age, None
+    # ---- soft similarity penalty between constrained and unconstrained ----
 
-    lv   = params["level_value"]
-    lb   = params["level_bounds"]["lower"]
-    ub   = params["level_bounds"]["upper"]
-    # map ages to indices
-    start = int(np.clip(lv["age_before"] - ages[0], 0, ages.size))
-    end   = int(np.clip(lv["age_after"]  - ages[0], 0, ages.size))
-    idx   = at.arange(ages.size)
-    val   = float(lv["value"])
-
-    # piecewise: val before start, raw in [start,end], val after end
-    clipped = at.switch(idx < start, val,
-                at.switch(idx > end, val, unconstrained_mu_age))
-    
-    pm_model.add_coord("age", ages)
-    constrained_mu_age = pm.Deterministic(name=f"constrained_mu_age_{label}", var=at.clip(clipped, lb, ub), dims=("age",))
-    # add similarity potential back to the raw curve
     similar(
-        child_curve      = constrained_mu_age,
-        parent_curve     = unconstrained_mu_age,
-        sigma_parent     = 0.0,
-        sigma_diff       = 0.01,
-        eps              = 1e-6,
-        penalty_name     = "_level_constraints"
-    )
-    return constrained_mu_age
-
-
-def derivative_constraints(mu_age: at.TensorVariable):
-    """
-    Enforce monotonicity by heavily penalizing negative (or positive)
-    finite-differences on specified age-ranges.
-    """
-    model      = pm.modelcontext(None) # reforged_mr - derivative_constraints()
-    ages       = model.shared_data["ages"]
-    params     = model.shared_data["params_of_data_type"]
-    inc, dec   = params.get("increasing"), params.get("decreasing")
-    if not (inc and dec):
-        return {}
-
-    # helper to turn an age into a safe diff-index
-    def to_idx(age_val):
-        idx = age_val - ages[0]
-        return int(np.clip(idx, 0, len(ages) - 1))
-
-    i0, i1 = to_idx(inc["age_start"]), to_idx(inc["age_end"])
-    d0, d1 = to_idx(dec["age_start"]), to_idx(dec["age_end"])
-
-    assert i1 <= d0 or d1 <= i0, (
-        f"Increasing range [{inc['age_start']}, {inc['age_end']}] overlaps "
-        f"with decreasing range [{dec['age_start']}, {dec['age_end']}]."
+        child_curve     = constrained,
+        parent_curve    = unconstrained_mu_age,
+        sigma_parent    = 0.0,     # parent treated as fixed target
+        sigma_diff_log  = 0.01,    # small allowance in log-space
+        eps             = 1e-6,
+        penalty_name    = "_level_constraints",
     )
 
-    diff = at.diff(mu_age)
-    inc_viol = at.sum(at.clip(diff[i0:i1], -np.inf,   0.0))
-    dec_viol = at.sum(at.clip(diff[d0:d1],   0.0, np.inf))
+    return constrained
 
-    penalty = inc_viol**2 + dec_viol**2
-    logp    = -1e12 * penalty
 
-    pm.Potential(
-        name=f"mu_age_derivative_potential_{model.shared_data['data_type']}",
-        var=logp
+def derivative_constraints(data_type: str, mu_age: at.TensorVariable):
+    pm_model = pm.modelcontext(None)
+    sd       = pm_model.shared_data
+
+    # --- params 로드 ---
+    params = sd["parameters"]
+    params_dt = params[data_type]
+    inc = params_dt.get("increasing")
+    dec = params_dt.get("decreasing")
+    if not inc and not dec:
+        return None  
+    
+    # --- coords['age'] 필수 ---
+    if "age" not in pm_model.coords:
+        raise ValueError("coords['age'] is missing. Register it upstream.")
+    ages = np.asarray(pm_model.coords["age"], dtype=float)
+    if ages.ndim != 1 or ages.size < 2:
+        raise ValueError("coords['age'] must be a 1D array with length >= 2.")
+    if np.any(np.diff(ages) <= 0):
+        raise ValueError("coords['age'] must be strictly increasing.")
+
+
+    # --- helper: [a_start, a_end] → diff 인덱스 구간 [i0, i1_excl] (on diff(mu) of length N-1) ---
+    def _diff_span(a_start, a_end, grid):
+        if a_end < a_start:
+            raise ValueError(...)
+        N = grid.size
+        i_start_age = int(np.searchsorted(grid, float(a_start), side="left"))
+        i_end_age   = int(np.searchsorted(grid, float(a_end),   side="right") - 1)
+        i_start_age = max(0, min(i_start_age, N - 1))
+        i_end_age   = max(0, min(i_end_age,   N - 1))
+
+        # diff 인덱스 j는 (age[j], age[j+1]) 쌍을 뜻함.
+        # 문헌: a = a_s..a_e-1 만 포함 → 슬라이스 끝은 index(a_e)
+        i0 = i_start_age
+        i1_excl = min(i_end_age, N - 1)     # ★ 여기서 +1 하지 않음
+        if i1_excl <= i0:
+            return None
+        return (i0, i1_excl)
+
+
+    # --- overlap 검사---
+    if inc and dec:
+        a_inc_start, a_inc_end = float(inc["age_start"]), float(inc["age_end"])
+        a_dec_start, a_dec_end = float(dec["age_start"]), float(dec["age_end"])
+        if max(a_inc_start, a_dec_start) <= min(a_inc_end, a_dec_end):
+            raise ValueError(
+                f"Increasing [{a_inc_start}, {a_inc_end}] overlaps with decreasing [{a_dec_start}, {a_dec_end}]."
+            )
+
+    # --- diff와 위반량 계산 ---
+    diff = at.diff(mu_age)  # shape: (len(ages)-1,)
+    terms = []
+
+    if inc:
+        span = _diff_span(inc["age_start"], inc["age_end"], ages)
+        if span is not None:
+            s, e = span
+            # 증가 구간에서 음의 기울기(<=0) 벌점
+            inc_viol = at.sum(at.clip(diff[s:e], -np.inf, 0.0))
+            terms.append(inc_viol**2)
+
+    if dec:
+        span = _diff_span(dec["age_start"], dec["age_end"], ages)
+        if span is not None:
+            s, e = span
+            # 감소 구간에서 양의 기울기(>=0) 벌점
+            dec_viol = at.sum(at.clip(diff[s:e], 0.0, np.inf))
+            terms.append(dec_viol**2)
+
+    if not terms:
+        return None
+
+    penalty = terms[0] if len(terms) == 1 else at.sum(at.stack(terms))
+    logp    = -1e12 * penalty  
+
+    return pm.Potential(
+        name=f"mu_age_derivative_potential_{data_type}",
+        var=logp,
     )
 
 
-def covariate_level_constraints(X_centering, X_scaling, beta, U, alpha, mu_age) -> at.TensorVariable:
-    """
-    Enforce level‐bounds on the covariate‐adjusted rate curve.
-    If bounds['lower'] == 0, we skip the lower‐bound term entirely.
-    """
-    # --------------------------- 1) Initialize PyMC model ---------------------------   
-    pm_model = pm.modelcontext(None)  # reforged_mr/model/priors/covariate_level_constraints()
+def covariate_level_constraints(data_type, mu_age):
+    pm_model = pm.modelcontext(None)
+    sd       = pm_model.shared_data
+    params_dt = sd["parameters"][data_type]
 
-    # --------------------------- 2) Extract shared data -----------------------------   
-    data_type       = pm_model.shared_data["data_type"]
-    region_id_graph = pm_model.shared_data["region_id_graph"]
-    params          = pm_model.shared_data["params_of_data_type"]
+    if not params_dt.get('include_covariates', True):
+        raise ValueError("include_covariates is False. This function is only for covariates.")
 
-    lvl    = params.get('level_value')
-    bounds = params.get('level_bounds')
+    bounds = params_dt.get("level_bounds")
+    if not bounds or ("upper" not in bounds):
+        return None
 
-    # Exit if no level info
-    if not lvl or not bounds:
-        return {}
+    G      = sd["region_id_graph"]
+    reference_area_id  = sd['reference_area_id']
+    ref_level          = int(G.nodes[reference_area_id]['level'])
+    max_level          = int(sd['max_depth']) - 1
 
-    # --------------------------- 3) Compute sex covariate range (after centering) --- 
-    sex_idx    = list(X_centering.index).index('x_sex')
-    X_sex_max  =  0.5 - X_centering['x_sex'] / X_scaling['x_sex']
-    X_sex_min  = -0.5 - X_centering['x_sex'] / X_scaling['x_sex']
+    U           = sd[f"U_{data_type}"]
+    X_centering = sd[f"X_centering_{data_type}"]
+    X_scaling   = sd[f"X_scaling_{data_type}"]
+    beta    = sd[f"beta_{data_type}"]          # vector TensorVariable (Deterministic)
 
-    # --------------------------- 4) Build “layers” of U‐masks -----------------------
-    layers: list[np.ndarray] = []
-    global_id = 1  # TODO: make it a parameter later 
+    # ---- coords (필수) ----
+    re_dim  = f"re_loc_id_{data_type}"
+    fe_dim  = f"fe_eff_name_{data_type}"
+    if re_dim not in pm_model.coords:
+        raise ValueError(f"coord '{re_dim}' is missing. Register it when building U.")
+    if fe_dim not in pm_model.coords:
+        raise ValueError(f"coord '{fe_dim}' is missing. Register it when building X/beta.")
 
-    nodes = [global_id]
-    for _ in range(3):
-        nodes = [c for n in nodes for c in region_id_graph.successors(n)]
-        mask  = np.array([col in nodes for col in U.columns], dtype=bool)
-        if mask.any():
-            layers.append(mask)
+    # alpha 벡터 (Deterministic)
+    alpha = pm_model.named_vars[f"alpha_{data_type}"]
 
-    # --------------------------- 5) Prepare log‐bounds ------------------------------
-    lower_val = bounds['lower']
-    if lower_val <= 0:
-        low = None 
+    # 성별 FE 범위 (센터링/스케일링 반영)
+    b_sex = None
+    
+    if "x_sex" in X_centering.index and "x_sex" in X_scaling.index:
+        z_sex_max = ( 0.5 - X_centering["x_sex"]) / X_scaling["x_sex"]
+        z_sex_min = (-0.5 - X_centering["x_sex"]) / X_scaling["x_sex"]
+        try:
+            sex_idx = list(X_centering.index).index("x_sex")
+            b_sex   = beta[sex_idx]   # Subtensor OK
+        except ValueError:
+            b_sex = None
     else:
-        low = np.log(lower_val)
+        z_sex_max = z_sex_min = 0.0
 
-    high = np.log(bounds['upper'])  # high bound always exists
+    # 로그-바운드
+    raw_lb = float(bounds.get("lower", 0.0))
+    lb  = None if raw_lb <= 0.0 else np.log(raw_lb)
+    ub  = np.log(float(bounds["upper"]))
 
-    # --------------------------- 6) Build potential inside PyMC ---------------------
-    mu        = mu_age
-    log_vals  = at.log(mu)           # log(mu) at each age
-    log_max   = at.max(log_vals)     # base‐curve extrema
-    log_min   = at.min(log_vals)
+    # log(mu) 기본 상/하한
+    log_vals = at.log(pm.math.clip(mu_age, 1e-9, 1.0))
+    log_max  = at.max(log_vals)
+    log_min  = at.min(log_vals)
 
-    # (a) Add random‐effect contributions
-    alpha_list = [] if alpha is None else alpha
-    if len(alpha_list) > 0:
-        alphas = at.stack(alpha_list)  # shape=(n_re,)
-        for m in layers:
-            m_idx = np.where(m)[0]
-            if m_idx.size > 0:
-                sub_alphas = alphas[m_idx]
-                log_max += at.max(sub_alphas)
-                log_min += at.min(sub_alphas)
+    has_U = U.shape[1] > 0
 
-    # (b) Add sex fixed‐effect
-    b_sex = beta[sex_idx]
-    try:
-        log_max += X_sex_max * b_sex
-        log_min += X_sex_min * b_sex
-    except (TypeError, AttributeError):  # numeric case
-        log_max += X_sex_max * float(b_sex)
-        log_min += X_sex_min * float(b_sex)
+    # (a) RE 기여: 레벨별 max/min 누적 (보수적)
+    if (alpha is not None) and has_U:
+        loc_ids = np.asarray(pm_model.coords[re_dim], dtype=int)
+        levels  = np.array([G.nodes[i]['level'] for i in loc_ids], dtype=int)
+        lvls_of_interest = np.unique(levels[(levels > ref_level) & (levels <= max_level)])
 
-    # (c) Compute “below‐lower” violation (if applicable)
-    if low is None:
-        v_low = at.constant(0.0)
-    else:
-        v_low = at.minimum(0, log_min - low)  # negative if below bound
+        for lvl in lvls_of_interest:
+            idx = np.nonzero(levels == lvl)[0]       # numpy index
+            if idx.size:
+                sub = at.take(alpha, idx)        # (k_l,)
+                log_max = log_max + at.max(sub)
+                log_min = log_min + at.min(sub)
 
-    # (d) Compute “above‐upper” violation
-    v_high = at.maximum(0, log_max - high)    # positive if above bound
+    # (b) 성별 고정효과 기여
+    if b_sex is not None:
+        try:
+            log_max = log_max + z_sex_max * b_sex
+            log_min = log_min + z_sex_min * b_sex
+        except Exception:
+            b_sex_f = at.as_tensor_variable(float(b_sex))
+            log_max = log_max + z_sex_max * b_sex_f
+            log_min = log_min + z_sex_min * b_sex_f
 
-    # --------------------------- 7) Apply tight Normal(0, 1e-6) penalty --------------
-    sigma       = 1e-6
-    stacked_v   = at.stack([v_low, v_high])
-    norm_dist   = pm.Normal.dist(mu=0.0, sigma=sigma)
-    logp_vals   = pm.logp(norm_dist, stacked_v)
-    logp_sum    = at.sum(logp_vals)
+    # (c) 위반량(양수) 계산
+    v_low  = at.as_tensor_variable(0.0) if lb is None else at.maximum(0.0, lb  - log_min)
+    v_high = at.maximum(0.0, log_max - ub)
 
-    # --------------------------- 8) Register as Potential ---------------------------
-    covariate_constraint = pm.Potential(
-        f"covariate_constraint_{data_type}",
-        var=logp_sum
-    )
+    # (d) 강한 Normal(0, 1e-6) 페널티
+    sigma   = 1e-6
+    v_stack = at.stack([v_low, v_high])
+    logp    = at.sum(pm.logp(pm.Normal.dist(mu=0.0, sigma=sigma), v_stack))
 
-    return covariate_constraint
+    return pm.Potential(f"covariate_constraint_{data_type}", logp)
