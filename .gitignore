@@ -5,3 +5,4 @@ ted-local/
 **/__pycache__/
 *.pyc
 *.pkl
+*.zip
