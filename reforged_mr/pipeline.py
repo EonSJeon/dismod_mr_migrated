@@ -985,6 +985,11 @@ def _as_age_weight_vector(age_weights, ages):
         vec = vec / total
     return vec
 #
+def _ci(samples, coverage):
+    alpha = 100.0 - coverage
+    lo = float(np.percentile(samples, alpha/2.0))
+    hi = float(np.percentile(samples, 100.0 - alpha/2.0))
+    return lo, hi
 
 def world_predict(
     dt,
@@ -1101,7 +1106,7 @@ def world_predict(
     x_cache = {}  # (leaf_int, sex, year) -> np.ndarray or None
     w_cache = {}  # (leaf_int, sex, year) -> np.ndarray or None
 
-    sex_id_map = {'Male': 1, 'Female': 2, 'Both': 3}
+    # sex_id_map = {'Male': 1, 'Female': 2, 'Both': 3}
     rows = []
 
     # ---- 진행률 카운터 준비 ----
@@ -1211,33 +1216,61 @@ def world_predict(
                     np.clip(prev_curve, lower, upper, out=prev_curve)
                 prev_std_samples = prev_curve @ age_w_std
 
-                rows.append({
-                    "location_id":     int(node_g) if str(node_g).isdigit() else node_g,
-                    "location_name":   loc_name,
-                    "sex_name":        sex,
-                    "sex_id":          {'Male':1,'Female':2,'Both':3}[sex],
-                    "level":           int(level) if level is not None else None,
-                    "year":            year,
-                    "mean_prev":       float(np.mean(prev_samples)),
-                    "lower_prev":      float(np.percentile(prev_samples, 2.5)),
-                    "upper_prev":      float(np.percentile(prev_samples, 97.5)),
-                    "mean_cases":      float(np.mean(total_cases)),
-                    "lower_cases":     float(np.percentile(total_cases, 2.5)),
-                    "upper_cases":     float(np.percentile(total_cases, 97.5)),
-                    "mean_prev_std":   float(np.mean(prev_std_samples)),
-                    "lower_prev_std":  float(np.percentile(prev_std_samples, 2.5)),
-                    "upper_prev_std":  float(np.percentile(prev_std_samples, 97.5)),
-                })
+                # === 추가: 표준편차 & 여러 신뢰구간 ===
+                
+                coverages = [
+                    (100.0-5/1.0,     "p95"),
+                    (100.0-5/2.0,     "p97_5"),          # = 100 - 5/2
+                    (100.0-5/3.0, "p98_333"),     # ≈ 98.333…
+                    (100.0-5/4.0,    "p98_75"),         # = 100 - 5/4
+                ]
+
+                # 표준편차
+                sd_prev      = float(np.std(prev_samples, ddof=1))
+                sd_cases     = float(np.std(total_cases, ddof=1))
+                sd_prev_std  = float(np.std(prev_std_samples, ddof=1))
+
+                # 기본 필드
+                row = {
+                    "location_id":   int(node_g) if str(node_g).isdigit() else node_g,
+                    "location_name": loc_name,
+                    "sex_name":      sex,
+                    "sex_id":        {'Male':1,'Female':2,'Both':3}[sex],
+                    "level":         int(level) if level is not None else None,
+                    "year":          year,
+
+                    # mean
+                    "mean_prev":     float(np.mean(prev_samples)),
+                    "mean_cases":    float(np.mean(total_cases)),
+                    "mean_prev_std": float(np.mean(prev_std_samples)),
+
+                    # sd
+                    "sd_prev":       sd_prev,
+                    "sd_cases":      sd_cases,
+                    "sd_prev_std":   sd_prev_std,
+                }
+
+                # 각 coverage별 CI 추가
+                for cov, tag in coverages:
+                    lo_p, hi_p = _ci(prev_samples, cov)
+                    lo_c, hi_c = _ci(total_cases,  cov)
+                    lo_s, hi_s = _ci(prev_std_samples, cov)
+                    row[f"lower_prev_{tag}"]     = lo_p
+                    row[f"upper_prev_{tag}"]     = hi_p
+                    row[f"lower_cases_{tag}"]    = lo_c
+                    row[f"upper_cases_{tag}"]    = hi_c
+                    row[f"lower_prev_std_{tag}"] = lo_s
+                    row[f"upper_prev_std_{tag}"] = hi_s
+
+                rows.append(row)
 
     if len(rows) == 0:
         print("[world_predict] Warning: no rows computed; CSV not written.")
         return pd.DataFrame(columns=[
             "location_id","location_name","sex_name","sex_id","level","year",
-            "mean_prev","lower_prev","upper_prev",
-            "mean_cases","lower_cases","upper_cases",
-            "mean_prev_std","lower_prev_std","upper_prev_std",
+            "mean_prev","lower_prev_p95","upper_prev_p95",  # 헤더 예시 (비어있을 수도)
         ])
-
+    
     df = (
         pd.DataFrame(rows)
         .sort_values(["year","level","location_name","sex_id"])
