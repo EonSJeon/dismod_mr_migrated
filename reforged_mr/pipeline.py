@@ -736,7 +736,6 @@ def predict_for(
     population_weighted = True,
     lower               = 0.0,
     upper               = 1.0,
-    return_scalar       = True,
 ):
     sd = pm_model.shared_data
     params = sd['parameters']
@@ -768,28 +767,8 @@ def predict_for(
         else:
             leaf_ids = [loc]
 
-        if return_scalar:
-            num_prev  = np.zeros(n_samples)
-            num_cases = np.zeros(n_samples)
-            den = 0.0
-
-            for leaf in leaf_ids:
-                w = _pop_weights_for_leaf(detailed_pop, leaf, year_id, ages, sex_name)
-                ws = w.sum()
-                if ws <= 0:
-                    continue
-                num_prev  += (mu_trace * w[None, :]).sum(axis=1)
-                num_cases += (mu_trace * w[None, :]).sum(axis=1)
-                den += ws
-
-            if not np.isfinite(den) or den <= 0:
-                raise ValueError(f"[predict_for] detailed_pop empty: loc={location_id}, year={year_id}, sex={sex_name}")
-
-            prevalence = np.clip(num_prev / den, lower, upper)
-            cases      = num_cases
-            return {"prevalence": prevalence, "cases": cases}
-        else:
-            return np.clip(mu_trace, lower, upper)
+        return np.clip(mu_trace, lower, upper)
+            
 
     # -------------------- 2) 공변량/RE 포함 모드 --------------------
 
@@ -856,14 +835,10 @@ def predict_for(
         U_row_template = pd.Series(dtype=float)
 
     # aggregation
-    if return_scalar:
-        num_prev  = np.zeros(n_samples)
-        num_cases = np.zeros(n_samples)
-        den = 0.0
-    else:
-        num = np.zeros((n_samples, n_ages))
-        den = np.zeros(n_ages) if population_weighted else 0.0
-        leaf_count = 0
+    num = np.zeros((n_samples, n_ages))
+    den = np.zeros(n_ages) if population_weighted else 0.0
+    leaf_count = 0
+        
 
     for leaf in leaf_ids:
         # (a) U_row (경로 → 중심화 적용)
@@ -897,40 +872,30 @@ def predict_for(
         if ws <= 0:
             continue
 
-        if return_scalar:
-            num_prev  += (preds_leaf * w[None, :]).sum(axis=1)
-            num_cases += (preds_leaf * w[None, :]).sum(axis=1)
-            den += ws
-        else:
-            if population_weighted:
+        if population_weighted:
                 num += preds_leaf * w[None, :]
                 den += w
-            else:
-                num += preds_leaf
-                leaf_count += 1
+        else:
+            num += preds_leaf
+            leaf_count += 1
+            
 
     # finalize
-    if return_scalar:
-        if not np.isfinite(den) or den <= 0:
-            raise ValueError(f"[predict_for] no population: loc={location_id}, year={year_id}, sex={sex_name}")
-        prevalence = np.clip(num_prev / den, lower, upper)
-        cases      = num_cases
-        return {"prevalence": prevalence, "cases": cases}
-    else:
-        if population_weighted:
+    if population_weighted:
             den_safe = np.where(den > 0, den, 1e-12)
             preds_curve = num / den_safe[None, :]
             return np.clip(preds_curve, lower, upper)
-        else:
-            if leaf_count == 0:
-                raise ValueError("no valid leaf")
-            preds_curve = num / leaf_count
-            return np.clip(preds_curve, lower, upper)
+    else:
+        if leaf_count == 0:
+            raise ValueError("no valid leaf")
+        preds_curve = num / leaf_count
+        return np.clip(preds_curve, lower, upper)
+        
 
 
 # ------------ 헬퍼: 성별 포함 strict 인구 가중치 ------------
 def _pop_weights_for_leaf(dpop, leaf_id, year_id, ages, sex_name):
-    ages = np.asarray(ages, dtype=float)
+    ages = np.asarray(ages, dtype=int)
 
     df = dpop.copy()
     df['location_id'] = df['location_id'].astype(int)
