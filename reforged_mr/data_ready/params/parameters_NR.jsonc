@@ -59,9 +59,7 @@
         "sign": "positive"
       },
       "x_lpa": {
-        "dist": "HalfNormal",
-        "sigma": 1.0,
-        "sign": "positive"
+        "dist": "Constant",
       },
       "x_sdi": {
         "dist": "Constant",
@@ -83,20 +81,20 @@
 
     // Default p values before and after key ages
     "level_value": {
-      "age_before": 30, // holds before this age
+      "age_before": 40, // holds before this age
       "age_after": 100, // holds after this age
       "value": 0.0, // p value
     },
 
     // Mesh points used for parameter interpolation
-    "parameter_age_mesh": [0, 30, 40, 50, 60, 70, 80, 90, 100],
+    "parameter_age_mesh": [0, 40, 50, 60, 70, 80, 90, 100],
 
     // Degree of heterogeneity in the model
     "heterogeneity": "Very",
 
     // Smoothness configuration across ages
     "smoothness": {
-      "age_start": 30, // smoothing begins
+      "age_start": 40, // smoothing begins
       "amount": "Very", // smoothing intensity
       "age_end": 100, // smoothing ends
     },

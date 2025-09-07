@@ -321,10 +321,12 @@ def build_beta(data_type: str, X: pd.DataFrame):
         dist = spec.get('dist', 'Normal')
 
         if dist == 'Constant':
+            print(f"Constant {name}")
             val = float(spec.get('mu', 0.0))
             beta.append(pm.Deterministic(name, at.as_tensor_variable(val)))
 
         elif dist == 'TruncatedNormal':
+            print(f"TruncatedNormal {name}")
             beta.append(
                 MyTruncatedNormal(
                     name=name,
@@ -336,6 +338,7 @@ def build_beta(data_type: str, X: pd.DataFrame):
             )
 
         elif dist == 'HalfNormal':
+            print(f"HalfNormal {name}")
             sign = spec.get('sign', 'positive')
             half = pm.HalfNormal(
                 name + ("_half" if sign == 'negative' else ""),
