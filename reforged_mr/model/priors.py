@@ -99,6 +99,7 @@ def derivative_constraints(data_type: str, mu_age: at.TensorVariable):
     params = sd["parameters"]
     params_dt = params[data_type]
     inc = params_dt.get("increasing")
+    print(f"inc: {inc}")
     dec = params_dt.get("decreasing")
     if not inc and not dec:
         return None  

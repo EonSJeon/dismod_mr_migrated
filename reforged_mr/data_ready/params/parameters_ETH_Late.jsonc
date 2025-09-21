@@ -46,7 +46,7 @@
   "p": {
     // Age interval during which p is increasing
     "increasing": {
-      "age_start": 0, // start of increase
+      "age_start": 40, // start of increase
       "age_end": 100, // end of increase
     },
 

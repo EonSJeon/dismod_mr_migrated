@@ -1100,9 +1100,11 @@ def world_predict(
                 w_key = (leaf_int, sex, year)
                 if w_key in w_cache:
                     w = w_cache[w_key]
+
                 else:
                     try:
                         w = _pop_weights_for_leaf(sd['detailed_pop'], int(leaf_int), year, ages, sex)
+
                     except Exception as e:
                         if verbose:
                             print(f"  skip leaf={leaf_int}, sex={sex}, year={year} :: {e} "

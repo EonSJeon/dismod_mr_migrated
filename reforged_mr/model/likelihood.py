@@ -2,6 +2,7 @@ import numpy as np
 import pymc as pm
 import pytensor.tensor as at
 import warnings
+import pandas as pd
 
 LARGE_N_FOR_PRED = 1e6
 EPS = 1e-9
@@ -78,7 +79,94 @@ def poisson(data_type, obs_data, pi) -> None:
     count_pred = pm.Poisson(name=f"p_count_{data_type}", mu=pi * n_pred)
     pm.Deterministic(name=f"p_pred_{data_type}", var=count_pred / n_pred)
 
-def neg_binom(data_type, obs_data, pi, delta) -> None:
+
+def neg_binom(
+    name,
+    obs_or_p,              # DataFrame (옛버전) 또는 p-array (신버전)
+    pi,                    # TensorVariable 또는 array-like
+    delta,                 # TensorVariable 또는 스칼라/길이1 리스트
+    n: np.ndarray = None   # 신버전 경로일 때만 필요
+) -> dict:
+    """
+    Backward-compatible NegativeBinomial likelihood:
+      - 호출 1) neg_binom(name, obs_data_df, pi, delta)
+      - 호출 2) neg_binom(name, p_array,      pi, delta, n_array)
+
+    옛버전 동작(검증/클리핑/경고/빈 케이스 가드)을 그대로 유지.
+    Returns {"p_obs": None, "p_pred": Deterministic}
+    """
+    assert pm.modelcontext(None) is not None, "neg_binom() must be called within a PyMC model"
+
+    # --- delta가 [x] 형태면 스칼라로 풀기 ---
+    if isinstance(delta, list) and len(delta) == 1:
+        delta = delta[0]
+
+    # --- 입력 분기: DF 또는 배열 ---
+    if isinstance(obs_or_p, pd.DataFrame):
+        df = obs_or_p
+        if not {"value", "effective_sample_size"}.issubset(df.columns):
+            raise ValueError("obs_data must have columns {'value','effective_sample_size'}")
+        p = df["value"].to_numpy(dtype=float)
+        n_arr = df["effective_sample_size"].to_numpy(dtype=float)
+        idx_for_warn = df.index.to_numpy()
+    else:
+        # array 경로
+        if n is None:
+            raise TypeError("When passing arrays, you must provide both p and n.")
+        p = np.asarray(obs_or_p, dtype=float)
+        n_arr = np.asarray(n, dtype=float)
+        idx_for_warn = np.arange(p.shape[0])
+
+    # --- 검증 (옛버전 정책) ---
+    assert np.all(p >= 0.0), "observed values must be non-negative"
+    assert np.all(p <= 1.0), "observed values must be <= 1"
+    assert np.all(n_arr >= 0.0), "effective sample size must be non-negative"
+
+    # --- 카운트 생성: rint + clip + int64 ---
+    obs_counts = np.clip(np.rint(p * n_arr), 0, n_arr).astype(np.int64)
+
+    n_float = n_arr.copy()
+    nonzero_idx = np.where(n_float > 0.0)[0]
+
+    # --- mu/alpha 텐서 ---
+    mu_obs_all = pi * n_float + 1e-9
+    alpha_all  = delta
+
+    # --- 관측 우도 ---
+    if nonzero_idx.size > 0:
+        mu_obs = at.take(mu_obs_all, nonzero_idx)
+        if hasattr(alpha_all, "shape"):
+            alpha_obs = at.take(alpha_all, nonzero_idx)
+        else:
+            alpha_obs = alpha_all
+
+        nb_dist  = pm.NegativeBinomial.dist(mu=mu_obs, alpha=alpha_obs)
+        logp_val = pm.logp(nb_dist, obs_counts[nonzero_idx])
+        pm.Potential(name=f"p_obs_{name}", var=at.sum(logp_val))
+    else:
+        pm.Potential(name=f"p_obs_{name}", var=at.as_tensor_variable(0.0))
+
+    # --- predictive: n==0 처리 ---
+    LARGE_N_FOR_PRED = int(1e9)
+    zero_mask = (n_float == 0.0)
+    if np.any(zero_mask):
+        warnings.warn(
+            f"[neg_binom] effective_sample_size == 0 for {int(zero_mask.sum())} rows; "
+            f"using n_pred={LARGE_N_FOR_PRED} for predictive rate. "
+            f"indices={(idx_for_warn[zero_mask]).tolist()}",
+            RuntimeWarning,
+        )
+
+    n_pred = n_float.copy()
+    n_pred[zero_mask] = float(LARGE_N_FOR_PRED)
+    mu_pred = pi * n_pred + 1e-9
+
+    p_pred = pm.Deterministic(name=f"p_pred_{name}", var=mu_pred / n_pred)
+
+    return {"p_obs": None, "p_pred": p_pred}
+
+
+def neg_binom_x(data_type, obs_data, pi, delta) -> None:
 
     p = obs_data['value'].to_numpy(dtype=float)
     n = obs_data['effective_sample_size'].to_numpy(dtype=float)

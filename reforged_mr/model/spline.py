@@ -77,7 +77,9 @@ def spline(data_type: str) -> at.TensorVariable:
 
     # --- smoothness ---
     smooth_map = {"No Prior": None, "Slightly": 0.5, "Moderately": 0.05, "Very": 0.005}
+    print(f"smooth_map: {smooth_map}")
     raw_smooth = params_dt.get("smoothness", "No Prior")
+    print(f"raw_smooth: {raw_smooth}")
     if isinstance(raw_smooth, dict):
         amt = raw_smooth.get("amount", "No Prior")
         if isinstance(amt, str):
@@ -100,19 +102,34 @@ def spline(data_type: str) -> at.TensorVariable:
     W = at.constant(build_W_linear(knots, ages))
 
     # --- knot log-values & positive heights ---
-    gamma     = pm.Normal(f"gamma_{data_type}", mu=0.0, sigma=10.0, dims=(knot_dim,))
+    gamma_init = np.full(knots.size, -10.0)
+    gamma     = pm.Normal(f"gamma_{data_type}", mu=0.0, sigma=10.0, dims=(knot_dim,), initval=gamma_init)
     exp_gamma = at.exp(gamma)
 
     # --- assemble mu(age) ---
     mu_age = pm.Deterministic(f"mu_age_{data_type}", at.dot(W, exp_gamma), dims=("age",))
 
     # --- rounded log-smoothing penalty (skip if No Prior) ---
+    # --- smooth prior: match the original exactly (no division by total length) ---
     if smoothing is not None:
-        gamma_min    = at.log(at.sum(exp_gamma) / (10.0 * knots.size))
-        clipped      = at.switch(gamma < gamma_min, gamma_min, gamma)
-        diffs        = clipped[:-1] - clipped[1:]
-        inv_denom    = 1.0 / ((knots[1:] - knots[:-1]) * (knots[-1] - knots[0]))  # /(Δa * total length)
-        penalty      = 0.5 * at.sum(diffs**2 * inv_denom) / (smoothing**2)
-        pm.Potential(f"smooth_{data_type}", -penalty)
+        # γ_min = log( (∑ exp(γ))/ (10*K) )
+        gamma_min = at.log(at.sum(exp_gamma) / (10.0 * knots.size))
+        clipped   = at.switch(gamma < gamma_min, gamma_min, gamma)
+
+        # diffs = clipped[k] - clipped[k+1]
+        diffs    = clipped[:-1] - clipped[1:]
+
+        # denominator: ONLY the interval length Δa_k (no / total_length)
+        intervals = knots[1:] - knots[:-1]
+        denom_t   = at.constant(intervals)
+
+        # S = ∑ (diffs^2 / Δa_k)
+        S = at.sum((diffs**2) / denom_t)
+
+        # same as original: -0.5 * S / σ^2
+        pm.Potential(f"smooth_{data_type}", -0.5 * S / (smoothing**2))
+
 
     return mu_age
+
+
