@@ -31,16 +31,16 @@ def load_jsonc(filepath):
     """Load JSONC file (JSON with comments)"""
     with open(filepath, 'r', encoding='utf-8') as f:
         content = f.read()
-    
+
     # Remove single-line comments (// ...)
     content = re.sub(r'//.*?$', '', content, flags=re.MULTILINE)
-    
+
     # Remove multi-line comments (/* ... */)
     content = re.sub(r'/\*.*?\*/', '', content, flags=re.DOTALL)
-    
+
     # Remove trailing commas before closing brackets/braces
     content = re.sub(r',\s*([}\]])', r'\1', content)
-    
+
     return json.loads(content)
 
 def load_json(filepath):
@@ -71,12 +71,12 @@ def describe_data(model):
     G               = model.shared_data['region_id_graph']
     data            = model.shared_data['data']
     id_to_name      = model.shared_data['id_to_name']
-    
+
     for n in nx.dfs_postorder_nodes(G, 1):
         cnt = data['location_id'].eq(n).sum() + sum(G.nodes[c].get('cnt', 0) for c in G.successors(n))
         G.nodes[n]['cnt'] = int(cnt)
         G.nodes[n]['depth'] = nx.shortest_path_length(G, 1, n)
-        
+
     for n in nx.dfs_preorder_nodes(G, 1):
         if G.nodes[n]['cnt'] > 0:
             print('  '*G.nodes[n]['depth'] + id_to_name[n] + f' ({n}): ', G.nodes[n]['cnt'])
@@ -267,7 +267,7 @@ def generate_pymc_objects(
 
     sd[f'mu_age_parent_{data_type}']    = mu_age_parent
     sd[f'sigma_age_parent_{data_type}'] = sigma_age_parent
-    
+
     # ----------------------------------------------------------------------
     # 2) data_type별 파라미터/설정 로드
     #    - parameters.json(c)에서 현재 data_type 블록만 추출
@@ -278,7 +278,7 @@ def generate_pymc_objects(
 
     include_covariates = params_of_data_type.get('include_covariates', True)
     rate_type          = params_of_data_type.get('rate_type', 'neg_binom')
-    
+
     # ----------------------------------------------------------------------
     # 3) 입력 데이터에서 현재 data_type만 필터링
     #    - 이후 우도/공변량 계산은 이 슬라이스를 기준으로 수행
@@ -419,7 +419,7 @@ def generate_pymc_objects(
 #     with pm_model:
 #         if verbose:
 #             logger.info("  ▶ pm.find_MAP() 수행 중...")
-        
+
 #         map_estimate = pm.find_MAP()
 #     return map_estimate
 
@@ -768,7 +768,7 @@ def predict_for(
             leaf_ids = [loc]
 
         return np.clip(mu_trace, lower, upper)
-            
+
 
     # -------------------- 2) 공변량/RE 포함 모드 --------------------
 
@@ -838,7 +838,7 @@ def predict_for(
     num = np.zeros((n_samples, n_ages))
     den = np.zeros(n_ages) if population_weighted else 0.0
     leaf_count = 0
-        
+
 
     for leaf in leaf_ids:
         # (a) U_row (경로 → 중심화 적용)
@@ -878,7 +878,7 @@ def predict_for(
         else:
             num += preds_leaf
             leaf_count += 1
-            
+
 
     # finalize
     if population_weighted:
@@ -890,7 +890,7 @@ def predict_for(
             raise ValueError("no valid leaf")
         preds_curve = num / leaf_count
         return np.clip(preds_curve, lower, upper)
-        
+
 
 
 # ------------ 헬퍼: 성별 포함 strict 인구 가중치 ------------
@@ -1184,7 +1184,7 @@ def world_predict(
                 prev_std_samples = prev_curve @ age_w_std
 
                 # === 추가: 표준편차 & 여러 신뢰구간 ===
-                
+
                 coverages = [
                     (100.0-5/1.0,     "p95"),
                     (100.0-5/2.0,     "p97_5"),          # = 100 - 5/2
@@ -1237,7 +1237,7 @@ def world_predict(
             "location_id","location_name","sex_name","sex_id","level","year",
             "mean_prev","lower_prev_p95","upper_prev_p95",  # 헤더 예시 (비어있을 수도)
         ])
-    
+
     df = (
         pd.DataFrame(rows)
         .sort_values(["year","level","location_name","sex_id"])
@@ -1246,141 +1246,6 @@ def world_predict(
     df.to_csv(output_csv_path, index=False)
     print(f"[world_predict] Saved {len(df)} rows to '{output_csv_path}'")
     return df
-
-#
-
-# def world_predict(
-#     pm_model,
-#     idata,
-#     years,              
-#     output_csv_path
-# ):
-#     # 1) 그래프/이름 매핑
-#     region_id_graph = pm_model.shared_data['region_id_graph']
-#     id_to_name      = pm_model.shared_data['id_to_name']
-#     ages            = pm_model.coords['age']
-#     age_weights_in  = pm_model.shared_data['age_weights']
-
-#     ages = np.asarray(ages, dtype=int)
-#     age_w = _as_age_weight_vector(age_weights_in, ages)
-
-#     # 2) level 0,2,3 노드만
-#     target_levels = {0, 2, 3}
-#     nodes = []
-#     for nid_str, data in region_id_graph.nodes(data=True):
-#         level = data.get('level', None)
-#         if level in target_levels:
-#             try:
-#                 nid_int = int(nid_str)
-#             except (TypeError, ValueError):
-#                 continue
-#             nodes.append((nid_int, level, id_to_name.get(nid_int, str(nid_int))))
-
-#     # ✅ GBD 관행 sex_id 매핑
-#     sex_id_map = {'Male': 1, 'Female': 2, 'Both': 3}
-
-#     rows = []
-#     for year in years:
-#         for sex in ['Both', 'Male', 'Female']:
-#             for loc_id, level, loc_name in nodes:
-#                 try:
-#                     # 1) 스칼라(유병률/환자수)
-#                     res_scalar = predict_for(
-#                         pm_model,
-#                         idata,
-#                         root_area='Global',
-#                         root_sex='Both',
-#                         root_year='all',
-#                         location_id=loc_id,
-#                         sex_name=sex,
-#                         year_id=int(year),
-#                         population_weighted=True,
-#                         lower=0.0,
-#                         upper=1.0,
-#                         include_covariates=True,
-#                         return_scalar=True,
-#                     )
-#                     prev_samples  = res_scalar["prevalence"]
-#                     cases_samples = res_scalar["cases"]
-
-#                     # 2) 연령표준화 유병률 (곡선 한 번 더)
-#                     preds_curve = predict_for(
-#                         pm_model,
-#                         idata,
-#                         root_area='Global',
-#                         root_sex='Both',
-#                         root_year='all',
-#                         location_id=loc_id,
-#                         sex_name=sex,
-#                         year_id=int(year),
-#                         population_weighted=True,
-#                         lower=0.0,
-#                         upper=1.0,
-#                         include_covariates=True,
-#                         return_scalar=False,
-#                     )
-#                     if preds_curve.ndim != 2 or preds_curve.shape[1] != len(age_w):
-#                         raise ValueError(
-#                             f"preds_curve shape {preds_curve.shape} != age_weights length {len(age_w)}"
-#                         )
-#                     prev_std_samples = preds_curve @ age_w  # (n_samples,)
-
-#                     # 요약
-#                     mean_prev     = float(np.mean(prev_samples))
-#                     lower_prev    = float(np.percentile(prev_samples, 2.5))
-#                     upper_prev    = float(np.percentile(prev_samples, 97.5))
-
-#                     mean_cases    = float(np.mean(cases_samples))
-#                     lower_cases   = float(np.percentile(cases_samples, 2.5))
-#                     upper_cases   = float(np.percentile(cases_samples, 97.5))
-
-#                     mean_prev_std   = float(np.mean(prev_std_samples))
-#                     lower_prev_std  = float(np.percentile(prev_std_samples, 2.5))
-#                     upper_prev_std  = float(np.percentile(prev_std_samples, 97.5))
-
-#                     rows.append({
-#                         "location_id":     loc_id,
-#                         "location_name":   loc_name,
-#                         "sex_name":        sex,
-#                         "sex_id":          sex_id_map[sex],
-#                         "level":           level,
-#                         "year":            int(year),
-#                         "mean_prev":       mean_prev,
-#                         "lower_prev":      lower_prev,
-#                         "upper_prev":      upper_prev,
-#                         "mean_cases":      mean_cases,
-#                         "lower_cases":     lower_cases,
-#                         "upper_cases":     upper_cases,
-#                         "mean_prev_std":   mean_prev_std,
-#                         "lower_prev_std":  lower_prev_std,
-#                         "upper_prev_std":  upper_prev_std,
-#                     })
-
-#                 except ValueError as e:
-#                     print(f"[world_predict] Skip loc={loc_id} ({loc_name}), year={year}, sex={sex} :: {e}")
-#                 except Exception as e:
-#                     print(f"[world_predict] Error  loc={loc_id} ({loc_name}), year={year}, sex={sex} :: {e}")
-
-#     # 4) 저장
-#     if len(rows) == 0:
-#         print("[world_predict] Warning: no rows computed; CSV not written.")
-#         return pd.DataFrame(columns=[
-#             "location_id","location_name","sex_name","sex_id","level","year",
-#             "mean_prev","lower_prev","upper_prev",
-#             "mean_cases","lower_cases","upper_cases",
-#             "mean_prev_std","lower_prev_std","upper_prev_std",
-#         ])
-
-#     df = (
-#         pd.DataFrame(rows)
-#         .sort_values(["year","level","location_name","sex_id"])
-#         .reset_index(drop=True)
-#     )
-#     df.to_csv(output_csv_path, index=False)
-#     print(f"[world_predict] Saved {len(df)} rows to '{output_csv_path}'")
-
-#     return df
-# #
 
 ########### visualize the data ###################################################
 def data_bars(df, style='book', color='black', label=None, max=500):
@@ -1440,5 +1305,3 @@ def visualize_pred(pred, data, save_path=None):
     if save_path is not None:
         plt.savefig(save_path, dpi=300, bbox_inches="tight")
         print(f"✅ Figure saved to {save_path}")
-
-    plt.show()
